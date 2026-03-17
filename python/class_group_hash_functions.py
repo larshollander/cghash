@@ -86,7 +86,7 @@ def pseudoprime_hash(message, discriminant, byte_length = 0):
 
         a += 3 - (a % 4)
 
-        b = gmpy2.powmod(discriminant, (a+1)//4, a)
+        b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
 
         if (b**2 - discriminant) % a == 0:
             break
