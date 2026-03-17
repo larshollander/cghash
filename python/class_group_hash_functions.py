@@ -109,22 +109,19 @@ def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
         gap -= gap % 4
 
     if not byte_length:
-        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
+        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4) // gap).bit_length() - 1) // 8
 
-    h  = hash_to_bytes(message + as_bytes(counter), byte_length)
-    h *= gap
-
-    a = gmpy2.mpz.from_bytes(h) + 3
-    b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
-
+    h  = hash_to_bytes(message, byte_length)
+    a = 4*gmpy2.mpz.from_bytes(h) + 3
+    
     while True:
+
+        b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
 
         if (b**2 - discriminant) % a == 0:
             break
 
         a += 4
-        b *= discriminant % a
-        b %= a
 
     if b.is_even():
         b = a - b
