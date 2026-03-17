@@ -69,10 +69,13 @@ def clr_hash(message, discriminant, byte_length = 0, n_small_primes = 2, miller_
     if b.is_even():
         b = a - b
 
+    if a % 3 == 1:
+        b = -b
+
     return (a,b)
 
-def pseudoprime_hash(message, discriminant, byte_length = 0):
-    
+def pseudoprime_hash_with_counter(message, discriminant, byte_length = 0):
+
     if not byte_length:
         byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
 
@@ -90,6 +93,38 @@ def pseudoprime_hash(message, discriminant, byte_length = 0):
 
         if (b**2 - discriminant) % a == 0:
             break
+
+    if b.is_even():
+        b = a - b
+
+    if a % 3 == 1:
+        b = -b
+
+    return (a,b)
+
+def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
+
+    if not gap:
+        gap  = discriminant.bit_length()
+        gap -= gap % 4
+
+    if not byte_length:
+        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
+
+    h  = hash_to_bytes(message + as_bytes(counter), byte_length)
+    h *= gap
+
+    a = gmpy2.mpz.from_bytes(h) + 3
+    b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
+
+    while True:
+
+        if (b**2 - discriminant) % a == 0:
+            break
+
+        a += 4
+        b *= discriminant % a
+        b %= a
 
     if b.is_even():
         b = a - b
