@@ -2,6 +2,7 @@ import gmpy2
 import hashlib
 import sympy
 
+from misc import is_possibly_prime
 from modsqrt import tonelli_shanks
 
 
@@ -22,7 +23,7 @@ def wesolowski_hash(message, discriminant, byte_length = 0, miller_rabin_iterati
         counter += 1
         a = gmpy2.mpz.from_bytes(h)
 
-        a += 1 - (a % 2)
+        a += 3 - (a % 4)
 
         if gmpy2.legendre(discriminant, a) == 1 and a.is_prime(miller_rabin_iterations):
             break
@@ -89,10 +90,12 @@ def pseudoprime_hash_with_counter(message, discriminant, byte_length = 0):
 
         a += 3 - (a % 4)
 
-        b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
+        if is_possibly_prime(a):
 
-        if (b**2 - discriminant) % a == 0:
-            break
+            b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
+
+            if (b**2 - discriminant) % a == 0:
+                break
 
     if b.is_even():
         b = a - b
@@ -105,7 +108,7 @@ def pseudoprime_hash_with_counter(message, discriminant, byte_length = 0):
 def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
 
     if not gap:
-        gap  = discriminant.bit_length()
+        gap  = (discriminant * discriminant.bit_length()).bit_length()
         gap -= gap % 4
 
     if not byte_length:
@@ -116,10 +119,12 @@ def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
     
     while True:
 
-        b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
+        if is_possibly_prime(a):
 
-        if (b**2 - discriminant) % a == 0:
-            break
+            b = gmpy2.powmod(discriminant % a, (a+1)//4, a)
+
+            if (b**2 - discriminant) % a == 0:
+                break
 
         a += 4
 
@@ -131,3 +136,50 @@ def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
 
     return (a,b)
 
+def hybrid_hash(message, discriminant, byte_length = 0, n_small_as = 2, miller_rabin_iterations = 30):
+
+    if not byte_length:
+        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
+
+    small_a_length = byte_length // (2*n_small_as)
+    large_a_length = byte_length - n_small_as * small_a_length
+
+    small_a_hash = wesolowski_hash if small_a_length >= 1024 else pseudoprime_hash_with_counter
+    large_a_hash = wesolowski_hash if large_a_length >= 1024 else pseudoprime_hash_with_counter
+
+    forms = []
+    forms.append(large_a_hash(message, discriminant, large_a_length))
+    a = forms[0][0]
+
+    counter = gmpy2.xmpz(0)
+
+    for _ in range(n_small_as):
+        while True:
+
+            a_new, b_new = small_a_hash(as_bytes(counter) + message, discriminant, small_a_length)
+
+            if all((a != a_new for (a, _) in forms)):
+                break
+
+            counter += 1
+
+        forms.append((a_new, b_new))
+        a *= a_new
+
+    b = gmpy2.mpz(sympy.ntheory.modular.crt(*zip(*forms))[0])
+    
+    if b.is_even():
+        b = a - b
+
+    if a % 3 == 1:
+        b = -b
+
+    return (a,b)
+
+hash_functions = {
+        "Wesolowski":wesolowski_hash,
+        "CLR":clr_hash,
+        "pseudoprime-counter":pseudoprime_hash_with_counter,
+        "pseudoprime-gap":pseudoprime_hash_with_gap,
+        "hybrid":hybrid_hash,
+        }
