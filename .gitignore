@@ -209,3 +209,6 @@ __marimo__/
 # Own stuff
 testing.py
 forms.py
+*.txt
+*.out
+testing.c
