@@ -2,18 +2,19 @@ import gmpy2
 import hashlib
 import sympy
 
-from misc import is_possibly_prime
+from misc import is_possibly_prime, qnr_primes
 from modsqrt import tonelli_shanks
 
 
 hash_to_bytes = lambda x, length: hashlib.shake_256(x).digest(length)
-as_bytes = lambda x: gmpy2.to_binary(x)[2:]
+as_bytes = lambda x: gmpy2.to_binary(x)[2:].ljust(4, b'\x00')
+as_hex = lambda xs: "".join("{:02x}".format(x) for x in xs)
 
 
 def wesolowski_hash(message, discriminant, byte_length = 0, miller_rabin_iterations = 30):
     
     if not byte_length:
-        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
+        byte_length = (discriminant.bit_length()//2 - 1) // 8
 
     counter = gmpy2.xmpz(0)
 
@@ -21,7 +22,9 @@ def wesolowski_hash(message, discriminant, byte_length = 0, miller_rabin_iterati
 
         h = hash_to_bytes(message + as_bytes(counter), byte_length)
         counter += 1
+
         a = gmpy2.mpz.from_bytes(h)
+        swap_b = a % 2
 
         a += 3 - (a % 4)
 
@@ -33,15 +36,15 @@ def wesolowski_hash(message, discriminant, byte_length = 0, miller_rabin_iterati
     if b.is_even():
         b = a - b
 
-    if a % 3 == 1:
+    if swap_b:
         b = -b
 
-    return (a,b)
+    return ((a,b), counter)
 
 def clr_hash(message, discriminant, byte_length = 0, n_small_primes = 2, miller_rabin_iterations = 30):
 
     if not byte_length:
-        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
+        byte_length = (discriminant.bit_length()//2 - 1) // 8
 
     small_prime_length = byte_length // (2*n_small_primes)
     large_prime_length = byte_length - n_small_primes * small_prime_length
@@ -70,15 +73,12 @@ def clr_hash(message, discriminant, byte_length = 0, n_small_primes = 2, miller_
     if b.is_even():
         b = a - b
 
-    if a % 3 == 1:
-        b = -b
-
-    return (a,b)
+    return ((a,b), counter)
 
 def pseudoprime_hash_with_counter(message, discriminant, byte_length = 0):
 
     if not byte_length:
-        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
+        byte_length = (discriminant.bit_length()//2 - 1) // 8
 
     counter = gmpy2.xmpz(0)
 
@@ -86,7 +86,9 @@ def pseudoprime_hash_with_counter(message, discriminant, byte_length = 0):
 
         h = hash_to_bytes(message + as_bytes(counter), byte_length)
         counter += 1
+
         a = gmpy2.mpz.from_bytes(h)
+        swap_b = a % 2
 
         a += 3 - (a % 4)
 
@@ -100,10 +102,10 @@ def pseudoprime_hash_with_counter(message, discriminant, byte_length = 0):
     if b.is_even():
         b = a - b
 
-    if a % 3 == 1:
+    if swap_b:
         b = -b
 
-    return (a,b)
+    return ((a,b), counter)
 
 def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
 
@@ -112,10 +114,14 @@ def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
         gap -= gap % 4
 
     if not byte_length:
-        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4) // gap).bit_length() - 1) // 8
+        byte_length = (discriminant.bit_length()//2 - 1) // 8
 
     h  = hash_to_bytes(message, byte_length)
-    a = 4*gmpy2.mpz.from_bytes(h) + 3
+
+    a = gmpy2.mpz.from_bytes(h)
+    swap_b = a % 2
+
+    a += 3 - (a % 4)
     
     while True:
 
@@ -131,15 +137,15 @@ def pseudoprime_hash_with_gap(message, discriminant, byte_length = 0, gap = 0):
     if b.is_even():
         b = a - b
 
-    if a % 3 == 1:
+    if swap_b:
         b = -b
 
-    return (a,b)
+    return ((a,b), 0)
 
 def hybrid_hash(message, discriminant, byte_length = 0, n_small_as = 2, miller_rabin_iterations = 30):
 
     if not byte_length:
-        byte_length = ((gmpy2.isqrt(abs(discriminant) // 4)).bit_length() - 1) // 8
+        byte_length = (discriminant.bit_length()//2 - 1) // 8
 
     small_a_length = byte_length // (2*n_small_as)
     large_a_length = byte_length - n_small_as * small_a_length
@@ -171,10 +177,7 @@ def hybrid_hash(message, discriminant, byte_length = 0, n_small_as = 2, miller_r
     if b.is_even():
         b = a - b
 
-    if a % 3 == 1:
-        b = -b
-
-    return (a,b)
+    return ((a,b), counter)
 
 hash_functions = {
         "Wesolowski":wesolowski_hash,
