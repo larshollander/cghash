@@ -1,10 +1,16 @@
 #include <openssl/evp.h>
 #include <gmp.h>
+#include <stdio.h>
 
 #include "primetest.h"
 #include "modsqrt.h"
 
-#define EVP_MAX_MD_SIZE 512 //bytes
+#define EVP_MAX_MD_SIZE 512
+
+#define PSEUDOPRIME_COUNTER 0
+#define WESOLOWSKI 1
+#define PSEUDOPRIME_COUNTER_DEBUG 2
+#define WESOLOWSKI_DEBUG 3
 
 void shake256(unsigned char* out, int out_len, unsigned char* msg, int msg_len, unsigned char* counter, int counter_len)
 {
@@ -24,13 +30,11 @@ void shake256(unsigned char* out, int out_len, unsigned char* msg, int msg_len, 
   EVP_MD_CTX_free(ctx);
 }
 
-int pseudoprime_counter_hash(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant)
+int pseudoprime_counter_hash(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant, int coefficient_size)
 {
   unsigned int counter = 0;
   int counter_len = sizeof(counter);
 
-  int discriminant_size = mpz_sizeinbase(discriminant, 2);
-  int coefficient_size = discriminant_size/2 - 1;
   unsigned char hash_value[coefficient_size];
 
   int swap_b = 0;
@@ -49,7 +53,7 @@ int pseudoprime_counter_hash(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, 
     mpz_setbit(a, 0);
     mpz_setbit(a, 1);
 
-    if (mpz_jacobi(discriminant, a) != 1 || !is_possibly_prime(a, b)) { continue; }
+    if (mpz_jacobi(discriminant, a) != 1 || mpz_possible_prime(a) == 0) { continue; }
 
     sqrt_mod_3_mod_4(b, discriminant, a);
     mpz_mul(cmp, b, b);
@@ -62,13 +66,11 @@ int pseudoprime_counter_hash(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, 
   return counter;
 }
 
-int wesolowski_hash(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant)
+int wesolowski_hash(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant, int coefficient_size)
 {
   unsigned int counter = 0;
   int counter_len = sizeof(counter);
 
-  int discriminant_size = mpz_sizeinbase(discriminant, 2);
-  int coefficient_size = discriminant_size/2 - 1;
   unsigned char hash_value[coefficient_size];
 
   int swap_b = 0;
@@ -84,7 +86,7 @@ int wesolowski_hash(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t dis
     mpz_setbit(a, 0);
     mpz_setbit(a, 1);
   }
-  while (mpz_jacobi(discriminant, a) != 1 || mpz_probab_prime_p(a, 25) == 0);
+  while (mpz_jacobi(discriminant, a) != 1 || mpz_probable_prime(a) == 0);
 
   sqrt_mod_3_mod_4(b, discriminant, a);
 
@@ -119,13 +121,11 @@ void shake256_debug(unsigned char* out, int out_len, unsigned char* msg, int msg
   for (int i = 0; i < out_len; i++) { fprintf(fptr, "%02hhx", out[i]); }
 }
 
-int pseudoprime_counter_hash_debug(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant, FILE* fptr)
+int pseudoprime_counter_hash_debug(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant, int coefficient_size, FILE* fptr)
 {
   unsigned int counter = 0;
   int counter_len = sizeof(counter);
 
-  int discriminant_size = mpz_sizeinbase(discriminant, 2);
-  int coefficient_size = discriminant_size/2 - 1;
   unsigned char hash_value[coefficient_size];
 
   int swap_b = 0;
@@ -145,9 +145,7 @@ int pseudoprime_counter_hash_debug(mpz_t a, mpz_t b, unsigned char* msg, int msg
     mpz_setbit(a, 1);
     gmp_fprintf(fptr, "\n%Zd", a);
 
-    if (mpz_jacobi(discriminant, a) != 1 || !is_possibly_prime(a, b)) { continue; }
-
-    fprintf(fptr, "*");
+    if (mpz_jacobi(discriminant, a) != 1 || mpz_possible_prime(a) == 0) { continue; }
 
     sqrt_mod_3_mod_4(b, discriminant, a);
     mpz_mul(cmp, b, b);
@@ -158,18 +156,15 @@ int pseudoprime_counter_hash_debug(mpz_t a, mpz_t b, unsigned char* msg, int msg
   if (swap_b) { mpz_neg(b, b); }
 
   fprintf(fptr, "\nhash done\n");
-  //for (int i = 0; i < coefficient_size/8; i++) { fprintf(fptr, "%02hhx", hash_value[i]); }
 
   return counter;
 }
 
-int wesolowski_hash_debug(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant, FILE* fptr)
+int wesolowski_hash_debug(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant, int coefficient_size, FILE* fptr)
 {
   unsigned int counter = 0;
   int counter_len = sizeof(counter);
 
-  int discriminant_size = mpz_sizeinbase(discriminant, 2);
-  int coefficient_size = discriminant_size/2 - 1;
   unsigned char hash_value[coefficient_size];
 
   int swap_b = 0;
@@ -186,15 +181,40 @@ int wesolowski_hash_debug(mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz
     mpz_setbit(a, 1);
     gmp_fprintf(fptr, "\n%Zd", a);
   }
-  while (mpz_jacobi(discriminant, a) != 1 || mpz_probab_prime_p(a, 25) == 0);
+  while (mpz_jacobi(discriminant, a) != 1 || mpz_probable_prime(a) == 0);
 
   sqrt_mod_3_mod_4(b, discriminant, a);
 
   if (mpz_even_p(b)) { mpz_sub(b, a, b); }
   if (swap_b) { mpz_neg(b, b); }
 
-  fprintf(fptr, "\n");
-  //for (int i = 0; i < coefficient_size/8; i++) { fprintf(fptr, "%02hhx", hash_value[i]); }
+  fprintf(fptr, "\nhash done\n");
 
   return counter;
 }
+
+int hash_to_form(int cg_hash_algorithm, mpz_t a, mpz_t b, unsigned char* msg, int msg_len, mpz_t discriminant, FILE* fptr)
+{
+  int discriminant_size = mpz_sizeinbase(discriminant, 2);
+  int coefficient_size;
+
+  switch (cg_hash_algorithm)
+  {
+    case PSEUDOPRIME_COUNTER:
+      coefficient_size = discriminant_size/2 - 1;
+      return pseudoprime_counter_hash(a, b, msg, msg_len, discriminant, coefficient_size);
+    case WESOLOWSKI:
+      coefficient_size = discriminant_size/2 - 1;
+      return wesolowski_hash(a, b, msg, msg_len, discriminant, coefficient_size);
+    case PSEUDOPRIME_COUNTER_DEBUG:
+      coefficient_size = discriminant_size/2 - 1;
+      return pseudoprime_counter_hash_debug(a, b, msg, msg_len, discriminant, coefficient_size, fptr);
+    case WESOLOWSKI_DEBUG:
+      coefficient_size = discriminant_size/2 - 1;
+      return wesolowski_hash_debug(a, b, msg, msg_len, discriminant, coefficient_size, fptr);
+    default:
+      fprintf(stderr, "unknown class group hash requested\n");
+      return 0;
+  }
+}
+
