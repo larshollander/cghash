@@ -208,7 +208,10 @@ __marimo__/
 
 # Own stuff
 testing.py
+main.py
 forms.py
 *.txt
 *.out
 testing.c
+main.c
+pt_test.c
