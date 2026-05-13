@@ -1,25 +1,14 @@
 #include <assert.h>
 
+#include "number_theory.h"
+
 #define SMALL_PRIME_PRODUCTS 30030, 25897, 26381, 29971
 #define N_SMALL_PRIME_PRODUCTS 4
 #define FIRST_PRIME_OMITTED 53
 
-#define swap(A,B) A ^= B; B ^= A; A ^= B
-
-unsigned long int gcd(unsigned long int a, unsigned long int b)
+int isprime (unsigned long t)
 {
-  while (b != 0)
-  {
-    a %= b;
-    swap(a,b);
-  }
-
-  return a;
-}
-
-int isprime (unsigned long int t)
-{
-  unsigned long int q, r, d;
+  unsigned long q, r, d;
 
   assert (t >= 3 && (t & 1) != 0);
   d = 3;
@@ -40,10 +29,10 @@ int mpz_possible_prime(mpz_t n)
   mpz_t r_;
   mpz_init(r_);
 
-  unsigned long int r;
-  unsigned long int spp[] = { SMALL_PRIME_PRODUCTS };
+  unsigned long r;
+  unsigned long spp[] = { SMALL_PRIME_PRODUCTS };
 
-  for (unsigned long int i = 0; i < N_SMALL_PRIME_PRODUCTS; i++)
+  for (unsigned long i = 0; i < N_SMALL_PRIME_PRODUCTS; i++)
   {
     r = mpz_fdiv_r_ui(r_, n, spp[i]);
 
@@ -99,51 +88,22 @@ int mpz_probable_prime(mpz_t n)
   if (mpz_possible_prime(n)) { return mpz_millerrabin(n, 25); }
 }
 
-int mpz_mr_base_2(mpz_t n) 
+int mr_base_2 (mpz_t n, mpz_t q, unsigned long k)
 {
-  mpz_t base, n_minus_one, exp;
+  mpz_t x, y;
+  mpz_init_set_ui(x, 2);
 
-  mpz_init_set_ui(base, 2);
+  mpz_init(y);
+  mpz_powm (y, x, q, n);
 
-  mpz_init(n_minus_one);
-  mpz_sub_ui(n_minus_one, n, 1);
+  if (mpz_cmp_ui (y, 1L) == 0 || mod_eq_m1 (y, n)) { return 1; }
 
-  unsigned int s = 0;
-  mpz_init_set(exp, n_minus_one);
-
-  while (mpz_even_p(exp)) 
-  {
-    mpz_fdiv_q_2exp(exp, exp, 1);
-    s++;
-  }
-
-  mpz_powm(base, base, exp, n);
-  mpz_clear(exp);
-
-  if (mpz_cmp_ui(base, 1) == 0)  {
-    mpz_clear(base);
-    mpz_clear(n_minus_one);
-    return 1;
-  }
-
-  for(int i = 0; i < s-1; i++) {
-      if (mpz_cmp(base, n_minus_one) == 0) {
-        mpz_clear(base);
-        mpz_clear(n_minus_one);
-        return 1;
-      }
-      mpz_powm_ui (base, base, 2, n);
-  }
-
-  if (mpz_cmp(base, n_minus_one) == 0) {
-    mpz_clear(base);
-    mpz_clear(n_minus_one);
-    return 1;
-  }
-
-  mpz_clear(base);
-  mpz_clear(n_minus_one);
-
+  for (unsigned long i = 1; i < k; i++)
+    {
+      mpz_powm_ui (y, y, 2L, n);
+      if (mod_eq_m1 (y, n)) { return 1; }
+      if (mpz_cmp_ui (y, 1L) <= 0) { return 0; }
+    }
   return 0;
 }
 
@@ -154,6 +114,7 @@ void sample_prime_discriminant(mpz_t discriminant, gmp_randstate_t state, int bi
     mpz_urandomb(discriminant, state, bit_length);
     mpz_setbit(discriminant, 0);
     mpz_setbit(discriminant, 1);
+    mpz_setbit(discriminant, bit_length-1);
   }
   while (mpz_probab_prime_p(discriminant, 25) == 0);
 

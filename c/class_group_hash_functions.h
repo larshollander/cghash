@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #include "primetest.h"
-#include "modsqrt.h"
+#include "number_theory.h"
 
 #define PSEUDOPRIME_COUNTER        0
 #define WESOLOWSKI                 1
