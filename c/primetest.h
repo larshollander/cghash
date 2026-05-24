@@ -1,12 +1,8 @@
-#include <assert.h>
-
-#include "number_theory.h"
-
 #define SMALL_PRIME_PRODUCTS 30030, 25897, 26381, 29971
 #define N_SMALL_PRIME_PRODUCTS 4
 #define FIRST_PRIME_OMITTED 53
 
-int isprime (unsigned long t)
+int isprime(unsigned long t)
 {
   unsigned long q, r, d;
 
@@ -50,7 +46,7 @@ int mpz_possible_prime(mpz_t n)
 
     nprimes = 0;
     p = 1;
-    ln2 = mpz_sizeinbase (n, 2);	
+    ln2 = mpz_sizeinbase(n, 2);	
     /* individual primes go into q,
      * prime product into p,
      * primes dividing p into primes[]
@@ -58,7 +54,7 @@ int mpz_possible_prime(mpz_t n)
 
     for (q = FIRST_PRIME_OMITTED; q < ln2; q += 2)
       {
-      if (isprime (q))
+      if (isprime(q))
         {
           if (__builtin_umull_overflow(p, q, &p0)) 
             /* p0 overflowed,
@@ -85,27 +81,27 @@ int mpz_possible_prime(mpz_t n)
 
 int mpz_probable_prime(mpz_t n)
 {
-  if (mpz_possible_prime(n)) { return mpz_millerrabin(n, 25); }
+  return (mpz_possible_prime(n) && mpz_millerrabin(n, 25));
 }
 
-int mr_base_2 (mpz_t n, mpz_t q, unsigned long k)
-{
-  mpz_t x, y;
-  mpz_init_set_ui(x, 2);
-
-  mpz_init(y);
-  mpz_powm (y, x, q, n);
-
-  if (mpz_cmp_ui (y, 1L) == 0 || mod_eq_m1 (y, n)) { return 1; }
-
-  for (unsigned long i = 1; i < k; i++)
-    {
-      mpz_powm_ui (y, y, 2L, n);
-      if (mod_eq_m1 (y, n)) { return 1; }
-      if (mpz_cmp_ui (y, 1L) <= 0) { return 0; }
-    }
-  return 0;
-}
+// int mr_base_2 (mpz_t n, mpz_t q, unsigned long k)
+// {
+//   mpz_t x, y;
+//   mpz_init_set_ui(x, 2);
+// 
+//   mpz_init(y);
+//   mpz_powm (y, x, q, n);
+// 
+//   if (mpz_cmp_ui (y, 1L) == 0 || mod_eq_m1 (y, n)) { return 1; }
+// 
+//   for (unsigned long i = 1; i < k; i++)
+//     {
+//       mpz_powm_ui (y, y, 2L, n);
+//       if (mod_eq_m1 (y, n)) { return 1; }
+//       if (mpz_cmp_ui (y, 1L) <= 0) { return 0; }
+//     }
+//   return 0;
+// }
 
 void sample_prime_discriminant(mpz_t discriminant, gmp_randstate_t state, int bit_length)
 {
