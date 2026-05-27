@@ -56,34 +56,34 @@ int all_coprime(mpz_t a, mpz_t* as, int n)
  */
 void crt(mpz_t M, mpz_t x, const mpz_t *m, const mpz_t *a, size_t n) 
 {
-    mpz_t Mi, yi, temp;
+  mpz_t Mi, yi, temp;
 
-    // Initialize temporaries
-    mpz_init(Mi);
-    mpz_init(yi);
-    mpz_init(temp);
+  // Initialize temporaries
+  mpz_init(Mi);
+  mpz_init(yi);
+  mpz_init(temp);
+  
+  // Step 2: Apply CRT formula: x = Σ(a[i] * M[i] * y[i]) mod M
+  
+  for (size_t i = 0; i < n; i++) 
+  {
+    // M[i] = M / m[i]
+    mpz_div(Mi, M, m[i]);
     
-    // Step 2: Apply CRT formula: x = Σ(a[i] * M[i] * y[i]) mod M
+    // y[i] = M[i]^(-1) mod m[i] (modular inverse)
+    mpz_invert(yi, Mi, m[i]);
     
-    for (size_t i = 0; i < n; i++) 
-    {
-        // M[i] = M / m[i]
-        mpz_div(Mi, M, m[i]);
-        
-        // y[i] = M[i]^(-1) mod m[i] (modular inverse)
-        mpz_invert(yi, Mi, m[i]);
-        
-        // Add term: a[i] * M[i] * y[i]
-        mpz_mul(temp, a[i], Mi);
-        mpz_mul(temp, temp, yi);
-        mpz_add(x, x, temp);
-    }
-    
-    // Final reduction: result = result mod M
-    mpz_mod(x, x, M);
-    
-    // Clean up temporaries
-    mpz_clear(Mi);
-    mpz_clear(yi);
-    mpz_clear(temp);
+    // Add term: a[i] * M[i] * y[i]
+    mpz_mul(temp, a[i], Mi);
+    mpz_mul(temp, temp, yi);
+    mpz_add(x, x, temp);
+  }
+  
+  // Final reduction: result = result mod M
+  mpz_mod(x, x, M);
+  
+  // Clean up temporaries
+  mpz_clear(Mi);
+  mpz_clear(yi);
+  mpz_clear(temp);
 }
