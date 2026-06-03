@@ -1,3 +1,8 @@
+#ifndef GMP_INCLUDED
+#define GMP_INCLUDED
+#include <gmp.h>
+#endif
+
 #define swap(A,B) A ^= B; B ^= A; A ^= B
 
 unsigned long gcd(unsigned long a, unsigned long b)

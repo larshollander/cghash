@@ -1,3 +1,8 @@
+#ifndef GMP_INCLUDED
+#define GMP_INCLUDED
+#include <gmp.h>
+#endif
+
 #define SMALL_PRIME_PRODUCTS 30030, 25897, 26381, 29971
 #define N_SMALL_PRIME_PRODUCTS 4
 #define FIRST_PRIME_OMITTED 53
@@ -84,35 +89,56 @@ int mpz_probable_prime(mpz_t n)
   return (mpz_possible_prime(n) && mpz_millerrabin(n, 25));
 }
 
-// int mr_base_2 (mpz_t n, mpz_t q, unsigned long k)
-// {
-//   mpz_t x, y;
-//   mpz_init_set_ui(x, 2);
-// 
-//   mpz_init(y);
-//   mpz_powm (y, x, q, n);
-// 
-//   if (mpz_cmp_ui (y, 1L) == 0 || mod_eq_m1 (y, n)) { return 1; }
-// 
-//   for (unsigned long i = 1; i < k; i++)
-//     {
-//       mpz_powm_ui (y, y, 2L, n);
-//       if (mod_eq_m1 (y, n)) { return 1; }
-//       if (mpz_cmp_ui (y, 1L) <= 0) { return 0; }
-//     }
-//   return 0;
-// }
-
-void sample_prime_discriminant(mpz_t discriminant, gmp_randstate_t state, int bit_length)
+int mod_eq_m1(mpz_t x, mpz_t n)
 {
-  do
-  {
-    mpz_urandomb(discriminant, state, bit_length);
-    mpz_setbit(discriminant, 0);
-    mpz_setbit(discriminant, 1);
-    mpz_setbit(discriminant, bit_length-1);
-  }
-  while (mpz_probab_prime_p(discriminant, 25) == 0);
+  mpz_add_ui(x, x, 1);
+  int result = mpz_divisible_p(x, n);
+  mpz_sub_ui(x, x, 1);
 
-  mpz_neg(discriminant, discriminant);
+  return result;
+}
+
+int millerrabin_base_2 (mpz_t n)
+{
+  mpz_t x, exp;
+  int k = 0;
+
+  mpz_init_set_ui(x, 2);
+
+  mpz_init(exp);
+  mpz_sub_ui(exp, n, 1);
+
+  while (mpz_even_p(exp))
+  {
+    mpz_tdiv_q_ui(exp, exp, 2);
+    k++;
+  }
+
+  mpz_powm(x, x, exp, n);
+
+  if (mpz_cmp_ui(x, 1) == 0 || mod_eq_m1(x, n))
+  {
+    mpz_clear(x);
+    return 1;
+  }
+
+  for (int i = 1; i < k; i++)
+    {
+      mpz_powm_ui(x, x, 2, n);
+
+      if (mod_eq_m1(x, n))
+      {
+        mpz_clear(x);
+        return 1;
+      }
+
+      if (mpz_cmp_ui(x, 1) <= 0)
+      {
+        mpz_clear(x);
+        return 0;
+      }
+    }
+
+  mpz_clear(x);
+  return 0;
 }
