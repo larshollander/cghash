@@ -108,7 +108,7 @@ void set_names(char* filename, char* hashname, AlgSpec* spec)
 
     case PSEUDOPRIME * REDUCE_D:
       strncpy(filename, "logs/xxx_pp_dma.txt", 19);
-      strncpy(hashname, "xxx_pp", 10);
+      strncpy(hashname, "xxx_pp_dma", 10);
       break;
 
     case PSEUDOPRIME_MR2 * NO_REDUCE_D:
@@ -117,8 +117,8 @@ void set_names(char* filename, char* hashname, AlgSpec* spec)
       break;
 
     case PSEUDOPRIME_MR2 * REDUCE_D:
-      strncpy(filename, "logs/xxx_pp_dma_mr2.txt", 23);
-      strncpy(hashname, "xxx_pp_dma_mr2", 14);
+      strncpy(filename, "logs/xxx_pp_mr2_dma.txt", 23);
+      strncpy(hashname, "xxx_pp_mr2_dma", 14);
       break;
 
     default:
