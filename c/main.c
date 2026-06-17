@@ -31,8 +31,8 @@ void debug_spec(AlgSpec* spec)
   printf("algorithm: %d\n", spec->algorithm);
   printf("factor type: %d\n", spec->factor_type);
   printf("use D%%=a optimisation: %d\n", spec->d_mod_a);
-  printf("# of small primes: %d\n", spec->n_small_primes);
-  printf("coefficient size: %d\n", spec->n_small_primes);
+  printf("# of small factors: %d\n", spec->n_small_factors);
+  printf("coefficient size: %d\n", spec->coefficient_size);
 }
 
 void prompt_parameters(mpz_t discriminant, AlgSpec* spec, Args* args)
@@ -68,7 +68,7 @@ void prompt_parameters(mpz_t discriminant, AlgSpec* spec, Args* args)
         break;
 
       case 'c':
-        spec->algorithm = CLR;
+        spec->algorithm = CLR_SF;
         break;
 
       default:
@@ -108,7 +108,7 @@ void prompt_parameters(mpz_t discriminant, AlgSpec* spec, Args* args)
       }
     }
 
-    if (spec->algorithm == CLR)
+    if (spec->algorithm == CLR_SF)
     {
       unsigned char buf[1];
       printf("use large factor ([y]es, [n]o): ");
@@ -186,7 +186,7 @@ Args parse_args(int argc, char** argv)
 AlgSpec parse_spec(char* buf)
 {
   int i = 0;
-  AlgSpec spec = { 0, 1, 1, 0, 0 };
+  AlgSpec spec = { 0, 1, 1, 1, 0 };
 
   // algorithm (always): 
   //   'w' for wesolowski, 
@@ -199,7 +199,7 @@ AlgSpec parse_spec(char* buf)
       break;
 
     case 'c':
-      spec.algorithm = CLR;
+      spec.algorithm = CLR_SF;
       break;
 
     default:
@@ -224,15 +224,6 @@ AlgSpec parse_spec(char* buf)
       return spec;
   }
 
-  // large factor (optional): 
-  //   'l', 
-  //   requires clr hash
-  if (buf[i] == 'l')
-  {
-    spec.algorithm = CLR_LF;
-    i++;
-  }
-
   // miller-rabin base 2 (optional): 
   //   'm', 
   //   requires pseudoprime factors
@@ -242,17 +233,27 @@ AlgSpec parse_spec(char* buf)
     i++;
   }
 
+  // large factor (optional): 
+  //   'l', 
+  //   requires clr hash
+  if (buf[i] == 'l')
+  {
+    spec.algorithm = CLR_LF;
+    i++;
+  }
+
   // D %= a (optional):
   //   'd',
   //   for any spec
   if (buf[i] == 'd') 
   { 
     spec.d_mod_a = REDUCE_D; 
+    i++;
   }
-  else 
-  { 
-    spec.d_mod_a = NO_REDUCE_D; 
-  }
+
+  // number of small factors (needed for clr):
+  //   decimal integer
+  spec.n_small_factors = atoi(buf + i);
 
   return spec;
 }

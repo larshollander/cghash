@@ -15,11 +15,8 @@
 
 #include "class_group_hash_functions.h"
 
-#define SMALL_PRIME_SIZES 255, 383, 511, 767, 1023, 1535, 2047, 3071
-#define N_SPS 8
-
-#define SMALL_PRIME_COUNTS 1, 2, 3, 4, 5, 6, 7, 8
-#define N_SPC 8
+#define COEFFICIENT_SIZES 133, 266
+#define N_CS 2
 
 // #define LOG_COUNTERS
 // #define LOG_COEFFICIENTS
@@ -89,57 +86,78 @@ void test_discriminant(AlgSpec spec, mpz_t discriminant, int max_input, long* su
 
 void set_names(char* filename, char* hashname, AlgSpec* spec)
 {
-  switch (spec->factor_type * spec->d_mod_a)
-  {
-    case PRIME * NO_REDUCE_D:
-      strncpy(filename, "logs/xxx_pr.txt", 15);
-      strncpy(hashname, "xxx_pr", 6);
-      break;
-
-    case PRIME * REDUCE_D:
-      strncpy(filename, "logs/xxx_pr_dma.txt", 19);
-      strncpy(hashname, "xxx_pr_dma", 10);
-      break;
-
-    case PSEUDOPRIME * NO_REDUCE_D:
-      strncpy(filename, "logs/xxx_pp.txt", 15);
-      strncpy(hashname, "xxx_pp", 6);
-      break;
-
-    case PSEUDOPRIME * REDUCE_D:
-      strncpy(filename, "logs/xxx_pp_dma.txt", 19);
-      strncpy(hashname, "xxx_pp_dma", 10);
-      break;
-
-    case PSEUDOPRIME_MR2 * NO_REDUCE_D:
-      strncpy(filename, "logs/xxx_pp_mr2.txt", 19);
-      strncpy(hashname, "xxx_pp_mr2", 10);
-      break;
-
-    case PSEUDOPRIME_MR2 * REDUCE_D:
-      strncpy(filename, "logs/xxx_pp_mr2_dma.txt", 23);
-      strncpy(hashname, "xxx_pp_mr2_dma", 14);
-      break;
-
-    default:
-      break;
-  }
-
   switch (spec->algorithm)
   {
     case WESOLOWSKI:
-      strncpy(filename, "logs/wes", 8);
-      strncpy(hashname, "wes", 3);
+      strncpy(filename, "logs/", 5);
+      strncpy(hashname, "", 0);
+      filename += 5;
+      hashname += 0;
       break;
 
-    case CLR:
-      strncpy(filename, "logs/clr", 8);
-      strncpy(hashname, "clr", 3);
+    case CLR_LF:
+      filename += snprintf(filename, 15, "logs/clr-%d-lf-", spec->n_small_factors);
+      hashname += snprintf(hashname, 10, "clr-%d-lf-", spec->n_small_factors);
+      break;
+
+    case CLR_SF:
+      filename += snprintf(filename, 15, "logs/clr-%d-sf-", spec->n_small_factors);
+      hashname += snprintf(hashname, 10, "clr-%d-sf-", spec->n_small_factors);
       break;
 
     default:
       break;
   }
+
+  switch (spec->factor_type)
+  {
+    case PRIME:
+      strncpy(filename, "pr", 2);
+      strncpy(hashname, "pr", 2);
+      filename += 2;
+      hashname += 2;
+      break;
+
+    case PSEUDOPRIME:
+      strncpy(filename, "pp", 2);
+      strncpy(hashname, "pp", 2);
+      filename += 2;
+      hashname += 2;
+      break;
+
+    case PSEUDOPRIME_MR2:
+      strncpy(filename, "pp-mr2", 6);
+      strncpy(hashname, "pp-mr2", 6);
+      filename += 6;
+      hashname += 6;
+      break;
+
+    default:
+      break;
+  }
+
+  switch (spec->d_mod_a)
+  {
+    case REDUCE_D:
+      strncpy(filename, "-dma.txt", 8);
+      strncpy(hashname, "-dma", 4);
+      filename += 8;
+      hashname += 4;
+      break;
+
+    case NO_REDUCE_D:
+      strncpy(filename, ".txt", 4);
+      strncpy(hashname, "", 0);
+      filename += 4;
+      hashname += 0;
+      break;
+
+    default:
+      break;
+  }
+
+  strncpy(filename, "\x00", 1);
+  strncpy(hashname, "\x00", 1);
 }
 
 void test_algorithm(AlgSpec spec, mpz_t* discriminants, int n_discriminants, int discriminant_size, int max_input)
@@ -147,68 +165,37 @@ void test_algorithm(AlgSpec spec, mpz_t* discriminants, int n_discriminants, int
   int i, j;
 
   int n_hashes = max_input * n_discriminants;
-  int small_prime_sizes[N_SPS] = { SMALL_PRIME_SIZES };
-  int small_prime_counts[N_SPC] = { SMALL_PRIME_COUNTS };
-
+  int coefficient_sizes[N_CS] = { COEFFICIENT_SIZES };
   long sum_counters;
   double sum_times;
 
-  char filename[24];
-  char hashname[15];
-
-  for (i = 0; i < 20; i++) { filename[i] = '\x00'; }
-  for (i = 0; i < 11; i++) { hashname[i] = '\x00'; }
+  char filename[30];
+  char hashname[26];
 
   set_names(filename, hashname, &spec);
 
   FILE* fptr = fopen(filename, "w");
 
-  if (spec.algorithm == WESOLOWSKI)
+  printf("\n%s-%d\n", hashname, discriminant_size);
+  printf("len(a) | avg. #steps | avg. time (s)\n");
+
+  for (j = 0; j < N_CS; j++)
   {
-    for (j = 0; j < N_SPS; j++)
+    int coefficient_size = coefficient_sizes[j];
+
+    if (coefficient_size > discriminant_size/2 - 1) { break; }
+
+    spec.coefficient_size = coefficient_size;
+
+    sum_counters = 0;
+    sum_times = 0.0;
+
+    for (i = 0; i < n_discriminants; i++)
     {
-      int small_prime_size = small_prime_sizes[j];
-
-      if (small_prime_size > discriminant_size/2 - 1) { break; }
-
-      fprintf(fptr, "\nk = %d\n", small_prime_size);
-      printf("\n  (%s-%d-%d)\n", hashname, discriminant_size, small_prime_size);
-
-      spec.coefficient_size = small_prime_size;
-
-      sum_counters = 0;
-      sum_times = 0.0;
-
-      for (i = 0; i < n_discriminants; i++)
-      {
-        test_discriminant(spec, discriminants[i], max_input, &sum_counters, &sum_times, n_hashes, i * max_input, fptr);
-      }
-
-      printf("\navg. steps: %ld\navg. time (s): %.2e\n", sum_counters/n_hashes, sum_times/n_hashes);
+      test_discriminant(spec, discriminants[i], max_input, &sum_counters, &sum_times, n_hashes, i * max_input, fptr);
     }
-  }
 
-  if (spec.algorithm == CLR)
-  {
-    for (j = 0; j < N_SPC; j++)
-    {
-      int n_small_primes = small_prime_counts[j];
-
-      fprintf(fptr, "\nk = %d\n", n_small_primes);
-      printf("\n  (%s-%d-%d)\n", hashname, n_small_primes, discriminant_size);
-
-      spec.n_small_primes = n_small_primes;
-
-      sum_counters = 0;
-      sum_times = 0.0;
-
-      for (i = 0; i < n_discriminants; i++)
-      {
-        test_discriminant(spec, discriminants[i], max_input, &sum_counters, &sum_times, n_hashes, i * max_input, fptr);
-      }
-
-      printf("\navg. steps: %ld\navg. time (s): %.2e\n", sum_counters/n_hashes, sum_times/n_hashes);
-    }
+    printf("%6d | %11ld | %13.2e\n", coefficient_size, sum_counters/n_hashes, sum_times/n_hashes);
   }
 
   fclose(fptr);

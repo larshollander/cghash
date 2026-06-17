@@ -84,11 +84,6 @@ int mpz_possible_prime(mpz_t n)
   return 1;
 }
 
-int mpz_probable_prime(mpz_t n)
-{
-  return (mpz_possible_prime(n) && mpz_millerrabin(n, 25));
-}
-
 int mod_eq_m1(mpz_t x, mpz_t n)
 {
   mpz_add_ui(x, x, 1);

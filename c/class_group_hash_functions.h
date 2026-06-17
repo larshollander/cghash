@@ -22,8 +22,8 @@
 #include "primetest.h"
 
 #define WESOLOWSKI       1
-#define CLR              2
-#define CLR_LF           3
+#define CLR_LF           2
+#define CLR_SF           3
 
 #define PRIME            1
 #define PSEUDOPRIME      5
@@ -32,7 +32,8 @@
 #define NO_REDUCE_D      1
 #define REDUCE_D        11
 
-#define MIN_BLOCK_SIZE 255
+#define MIN_LF_SIZE     16
+#define MIN_FACTOR_SIZE 16
 
 // #define DEBUG_HASH
 // #define DEBUG_SHAKE
@@ -59,7 +60,7 @@ typedef struct
   int algorithm;
   int factor_type;
   int d_mod_a;
-  int n_small_primes;
+  int n_small_factors;
   int coefficient_size;
 } AlgSpec;
 
@@ -90,7 +91,7 @@ void shake256(S_OUT, S_MSG, S_CTR, FILE* fptr)
   EVP_MD_CTX_free(ctx);
 }
 
-int wesolowski_pr_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+int pr_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
 {
   int counter_len = sizeof(*counter);
 
@@ -116,7 +117,7 @@ int wesolowski_pr_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counte
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
   }
-  while (mpz_jacobi(discriminant, a) != 1 || mpz_probable_prime(a) == 0);
+  while (mpz_possible_prime(a) == 0 || mpz_jacobi(discriminant, a) != 1 || mpz_millerrabin(a, 25) == 0);
 
   sqrt_mod_3_mod_4(b, discriminant, a);
 
@@ -131,7 +132,7 @@ int wesolowski_pr_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counte
   return *counter;
 }
 
-int wesolowski_pp_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+int pp_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
 {
   int counter_len = sizeof(*counter);
 
@@ -159,7 +160,7 @@ int wesolowski_pp_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counte
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
-    if (mpz_jacobi(discriminant, a) != 1 || mpz_possible_prime(a) == 0) { continue; }
+    if (mpz_possible_prime(a) == 0 || mpz_jacobi(discriminant, a) != 1) { continue; }
 
     sqrt_mod_3_mod_4(b, discriminant, a);
     mpz_mul(cmp, b, b);
@@ -177,7 +178,7 @@ int wesolowski_pp_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counte
   return *counter;
 }
 
-int wesolowski_pp_mr2_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+int pp_mr2_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
 {
   int counter_len = sizeof(*counter);
 
@@ -205,7 +206,7 @@ int wesolowski_pp_mr2_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* co
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
-    if (mpz_jacobi(discriminant, a) != 1 || mpz_possible_prime(a) == 0 || millerrabin_base_2(a) == 0) { continue; }
+    if (mpz_possible_prime(a) == 0 || mpz_jacobi(discriminant, a) != 1 || millerrabin_base_2(a) == 0) { continue; }
 
     sqrt_mod_3_mod_4(b, discriminant, a);
     mpz_mul(cmp, b, b);
@@ -223,7 +224,7 @@ int wesolowski_pp_mr2_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* co
   return *counter;
 }
 
-int wesolowski_pr_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+int pr_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
 {
   int counter_len = sizeof(*counter);
 
@@ -253,7 +254,7 @@ int wesolowski_pr_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* co
 #endif
     mpz_mod(d_mod_a, discriminant, a);
   }
-  while (mpz_jacobi(d_mod_a, a) != 1 || mpz_probable_prime(a) == 0);
+  while (mpz_possible_prime(a) == 0 || mpz_jacobi(d_mod_a, a) != 1 || mpz_millerrabin(a, 25) == 0);
 
   sqrt_mod_3_mod_4(b, d_mod_a, a);
   mpz_clear(d_mod_a);
@@ -269,7 +270,7 @@ int wesolowski_pr_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* co
   return *counter;
 }
 
-int wesolowski_pp_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+int pp_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
 {
   int counter_len = sizeof(*counter);
 
@@ -302,7 +303,7 @@ int wesolowski_pp_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* co
 #endif
     mpz_mod(d_mod_a, discriminant, a);
 
-    if (mpz_jacobi(d_mod_a, a) != 1 || mpz_possible_prime(a) == 0) { continue; }
+    if (mpz_possible_prime(a) == 0 || mpz_jacobi(d_mod_a, a) != 1) { continue; }
 
     sqrt_mod_3_mod_4(b, d_mod_a, a);
     mpz_mul(cmp, b, b);
@@ -322,7 +323,7 @@ int wesolowski_pp_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* co
   return *counter;
 }
 
-int wesolowski_pp_mr2_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+int pp_mr2_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
 {
   int counter_len = sizeof(*counter);
 
@@ -355,7 +356,7 @@ int wesolowski_pp_mr2_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int
 #endif
     mpz_mod(d_mod_a, discriminant, a);
 
-    if (mpz_jacobi(d_mod_a, a) != 1 || mpz_possible_prime(a) == 0 || millerrabin_base_2(a) == 0) { continue; }
+    if (mpz_possible_prime(a) == 0 || mpz_jacobi(d_mod_a, a) != 1 || millerrabin_base_2(a) == 0) { continue; }
 
     sqrt_mod_3_mod_4(b, d_mod_a, a);
     mpz_mul(cmp, b, b);
@@ -375,147 +376,97 @@ int wesolowski_pp_mr2_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int
   return *counter;
 }
 
-int clr_lf_pr_hash(S_FORM, S_MSG, int n_small_primes, FILE* fptr)
+int wesolowski_hash(AlgSpec spec, S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+{
+  switch (spec.factor_type * spec.d_mod_a)
+  {
+    case PRIME           * NO_REDUCE_D:
+      return pr_hash(FORM, MSG, coefficient_size, counter, fptr);
+
+    case PRIME           * REDUCE_D   :
+      return pr_dma_hash(FORM, MSG, coefficient_size, counter, fptr);
+
+    case PSEUDOPRIME     * NO_REDUCE_D:
+      return pp_hash(FORM, MSG, coefficient_size, counter, fptr);
+
+    case PSEUDOPRIME     * REDUCE_D   :
+      return pp_dma_hash(FORM, MSG, coefficient_size, counter, fptr);
+
+    case PSEUDOPRIME_MR2 * NO_REDUCE_D:
+      return pp_mr2_hash(FORM, MSG, coefficient_size, counter, fptr);
+
+    case PSEUDOPRIME_MR2 * REDUCE_D   :
+      return pp_mr2_dma_hash(FORM, MSG, coefficient_size, counter, fptr);
+
+    default:
+      fprintf(stderr, "unknown class group hash requested\n");
+      exit(1);
+  }
+}
+
+int clr_lf_hash(AlgSpec spec, S_FORM, S_MSG, int n_small_factors, FILE* fptr)
 {
   unsigned int counter = 0;
   int counter_len = sizeof(counter);
 
-  int coefficient_size = mpz_sizeinbase(discriminant, 2)/2 - 1;
-  int small_prime_size = coefficient_size / (2 * n_small_primes);
-  int large_prime_size = coefficient_size - n_small_primes * small_prime_size;
+  int small_factor_size = spec.coefficient_size / (2 * n_small_factors);
+  int large_factor_size = spec.coefficient_size - n_small_factors * small_factor_size;
 
-  mpz_t as[n_small_primes + 1];
-  mpz_t bs[n_small_primes + 1];
+  if (small_factor_size < MIN_FACTOR_SIZE) { return 0; }
 
-  for (int i = 0; i < n_small_primes; i++)
+  mpz_t as[n_small_factors + 1];
+  mpz_t bs[n_small_factors + 1];
+
+  for (int i = 0; i < n_small_factors; i++)
   {
     do
     {
-      wesolowski_pr_hash(FORM, MSG, small_prime_size, &counter, fptr);
+      wesolowski_hash(spec, FORM, MSG, small_factor_size, &counter, fptr);
     } while (all_coprime(a, as, i) == 0);
 
     mpz_init_set(as[i], a);
     mpz_init_set(bs[i], b);
   }
 
-  wesolowski_pr_hash(FORM, MSG, large_prime_size, &counter, fptr);
-  mpz_init_set(as[n_small_primes], a);
-  mpz_init_set(bs[n_small_primes], b);
+  wesolowski_hash(spec, FORM, MSG, large_factor_size, &counter, fptr);
+  mpz_init_set(as[n_small_factors], a);
+  mpz_init_set(bs[n_small_factors], b);
 
 #ifdef DEBUG_HASH
-  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_primes, a);
-  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_primes, b);
+  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_factors, a);
+  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_factors, b);
 #endif
 
-  crt(a, b, as, bs, n_small_primes + 1);
+  crt(a, b, as, bs, n_small_factors + 1);
 
   if (mpz_even_p(b)) { mpz_sub(b, a, b); }
 
   return counter;
 }
 
-int clr_lf_pp_hash(S_FORM, S_MSG, int n_small_primes, FILE* fptr)
+int clr_sf_hash(AlgSpec spec, S_FORM, S_MSG, int n_small_factors, FILE* fptr)
 {
   unsigned int counter = 0;
   int counter_len = sizeof(counter);
 
-  int coefficient_size = mpz_sizeinbase(discriminant, 2)/2 - 1;
-  int small_prime_size = coefficient_size / (2 * n_small_primes);
-  int large_prime_size = coefficient_size - n_small_primes * small_prime_size;
+  int small_factor_size = spec.coefficient_size / (n_small_factors + 1);
 
-  mpz_t as[n_small_primes + 1];
-  mpz_t bs[n_small_primes + 1];
-
-  for (int i = 0; i < n_small_primes; i++)
-  {
-    do
-    {
-      wesolowski_pp_hash(FORM, MSG, small_prime_size, &counter, fptr);
-    } while (all_coprime(a, as, i) == 0);
-
-    mpz_init_set(as[i], a);
-    mpz_init_set(bs[i], b);
-  }
-
-  wesolowski_pp_hash(FORM, MSG, large_prime_size, &counter, fptr);
-  mpz_init_set(as[n_small_primes], a);
-  mpz_init_set(bs[n_small_primes], b);
-
-#ifdef DEBUG_HASH
-  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_primes, a);
-  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_primes, b);
-#endif
-
-  crt(a, b, as, bs, n_small_primes + 1);
-
-  if (mpz_even_p(b)) { mpz_sub(b, a, b); }
-
-  return counter;
-}
-
-int clr_lf_pp_mr2_hash(S_FORM, S_MSG, int n_small_primes, FILE* fptr)
-{
-  unsigned int counter = 0;
-  int counter_len = sizeof(counter);
-
-  int coefficient_size = mpz_sizeinbase(discriminant, 2)/2 - 1;
-  int small_prime_size = coefficient_size / (2 * n_small_primes);
-  int large_prime_size = coefficient_size - n_small_primes * small_prime_size;
-
-  mpz_t as[n_small_primes + 1];
-  mpz_t bs[n_small_primes + 1];
-
-  for (int i = 0; i < n_small_primes; i++)
-  {
-    do
-    {
-      wesolowski_pp_mr2_hash(FORM, MSG, small_prime_size, &counter, fptr);
-    } while (all_coprime(a, as, i) == 0);
-
-    mpz_init_set(as[i], a);
-    mpz_init_set(bs[i], b);
-  }
-
-  wesolowski_pp_mr2_hash(FORM, MSG, large_prime_size, &counter, fptr);
-  mpz_init_set(as[n_small_primes], a);
-  mpz_init_set(bs[n_small_primes], b);
-
-#ifdef DEBUG_HASH
-  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_primes, a);
-  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_primes, b);
-#endif
-
-  crt(a, b, as, bs, n_small_primes + 1);
-
-  if (mpz_even_p(b)) { mpz_sub(b, a, b); }
-
-  return counter;
-}
-
-int clr_sf_pr_hash(S_FORM, S_MSG, int n_small_primes, FILE* fptr)
-{
-  unsigned int counter = 0;
-  int counter_len = sizeof(counter);
-
-  int coefficient_size = mpz_sizeinbase(discriminant, 2)/2 - 1;
-  int small_prime_size = coefficient_size / (n_small_primes + 1);
-
-  if (coefficient_size < MIN_BLOCK_SIZE) { return 0; }
-  if (small_prime_size < MIN_BLOCK_SIZE) 
+  if (small_factor_size < MIN_LF_SIZE) 
   { 
-    small_prime_size -= (MIN_BLOCK_SIZE - small_prime_size) / n_small_primes;
+    small_factor_size -= (MIN_LF_SIZE - small_factor_size) / n_small_factors;
   } 
+  if (small_factor_size < MIN_FACTOR_SIZE) { return 0; }
 
-  int large_prime_size = coefficient_size - n_small_primes * small_prime_size;
+  int large_factor_size = spec.coefficient_size - n_small_factors * small_factor_size;
 
-  mpz_t as[n_small_primes + 1];
-  mpz_t bs[n_small_primes + 1];
+  mpz_t as[n_small_factors + 1];
+  mpz_t bs[n_small_factors + 1];
 
-  for (int i = 0; i < n_small_primes; i++)
+  for (int i = 0; i < n_small_factors; i++)
   {
     do
     {
-      wesolowski_pr_hash(FORM, MSG, small_prime_size, &counter, fptr);
+      wesolowski_hash(spec, FORM, MSG, small_factor_size, &counter, fptr);
     } while (all_coprime(a, as, i) == 0);
 
     mpz_init_set(as[i], a);
@@ -524,118 +475,18 @@ int clr_sf_pr_hash(S_FORM, S_MSG, int n_small_primes, FILE* fptr)
 
   do 
   {
-    wesolowski_pr_hash(FORM, MSG, large_prime_size, &counter, fptr);
-  } while (all_coprime(a, as, n_small_primes) == 0);
+    wesolowski_hash(spec, FORM, MSG, large_factor_size, &counter, fptr);
+  } while (all_coprime(a, as, n_small_factors) == 0);
 
-  mpz_init_set(as[n_small_primes], a);
-  mpz_init_set(bs[n_small_primes], b);
-
-#ifdef DEBUG_HASH
-  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_primes, a);
-  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_primes, b);
-#endif
-
-  crt(a, b, as, bs, n_small_primes + 1);
-
-  if (mpz_even_p(b)) { mpz_sub(b, a, b); }
-
-  return counter;
-}
-
-int clr_sf_pp_hash(S_FORM, S_MSG, int n_small_primes, FILE* fptr)
-{
-  unsigned int counter = 0;
-  int counter_len = sizeof(counter);
-
-  int coefficient_size = mpz_sizeinbase(discriminant, 2)/2 - 1;
-  int small_prime_size = coefficient_size / (n_small_primes + 1);
-
-  if (coefficient_size < MIN_BLOCK_SIZE) { return 0; }
-  if (small_prime_size < MIN_BLOCK_SIZE) 
-  { 
-    small_prime_size -= (MIN_BLOCK_SIZE - small_prime_size) / n_small_primes;
-  } 
-
-  int large_prime_size = coefficient_size - n_small_primes * small_prime_size;
-
-  mpz_t as[n_small_primes + 1];
-  mpz_t bs[n_small_primes + 1];
-
-  for (int i = 0; i < n_small_primes; i++)
-  {
-    do
-    {
-      wesolowski_pp_hash(FORM, MSG, small_prime_size, &counter, fptr);
-    } while (all_coprime(a, as, i) == 0);
-
-    mpz_init_set(as[i], a);
-    mpz_init_set(bs[i], b);
-  }
-
-  do 
-  {
-    wesolowski_pp_hash(FORM, MSG, large_prime_size, &counter, fptr);
-  } while (all_coprime(a, as, n_small_primes) == 0);
-
-  mpz_init_set(as[n_small_primes], a);
-  mpz_init_set(bs[n_small_primes], b);
+  mpz_init_set(as[n_small_factors], a);
+  mpz_init_set(bs[n_small_factors], b);
 
 #ifdef DEBUG_HASH
-  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_primes, a);
-  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_primes, b);
+  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_factors, a);
+  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_factors, b);
 #endif
 
-  crt(a, b, as, bs, n_small_primes + 1);
-
-  if (mpz_even_p(b)) { mpz_sub(b, a, b); }
-
-  return counter;
-}
-
-int clr_sf_pp_mr2_hash(S_FORM, S_MSG, int n_small_primes, FILE* fptr)
-{
-  unsigned int counter = 0;
-  int counter_len = sizeof(counter);
-
-  int coefficient_size = mpz_sizeinbase(discriminant, 2)/2 - 1;
-  int small_prime_size = coefficient_size / (n_small_primes + 1);
-
-  if (coefficient_size < MIN_BLOCK_SIZE) { return 0; }
-  if (small_prime_size < MIN_BLOCK_SIZE) 
-  { 
-    small_prime_size -= (MIN_BLOCK_SIZE - small_prime_size) / n_small_primes;
-  } 
-
-  int large_prime_size = coefficient_size - n_small_primes * small_prime_size;
-
-  mpz_t as[n_small_primes + 1];
-  mpz_t bs[n_small_primes + 1];
-
-  for (int i = 0; i < n_small_primes; i++)
-  {
-    do
-    {
-      wesolowski_pp_mr2_hash(FORM, MSG, small_prime_size, &counter, fptr);
-    } while (all_coprime(a, as, i) == 0);
-
-    mpz_init_set(as[i], a);
-    mpz_init_set(bs[i], b);
-  }
-
-  do 
-  {
-    wesolowski_pp_mr2_hash(FORM, MSG, large_prime_size, &counter, fptr);
-  } while (all_coprime(a, as, n_small_primes) == 0);
-
-  mpz_init_set(as[n_small_primes], a);
-  mpz_init_set(bs[n_small_primes], b);
-
-#ifdef DEBUG_HASH
-  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_primes, a);
-  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_primes, b);
-#endif
-
-  crt(a, b, as, bs, n_small_primes + 1);
+  crt(a, b, as, bs, n_small_factors + 1);
 
   if (mpz_even_p(b)) { mpz_sub(b, a, b); }
 
@@ -646,66 +497,22 @@ int hash_to_form(AlgSpec spec, S_FORM, S_MSG, FILE* fptr)
 {
   int counter = 0;
 
-  switch (spec.algorithm * spec.factor_type * spec.d_mod_a)
+  if (spec.algorithm == WESOLOWSKI)
   {
-    case WESOLOWSKI * PRIME           * NO_REDUCE_D:
-      return wesolowski_pr_hash(FORM, MSG, spec.coefficient_size, &counter, fptr);
-
-    case WESOLOWSKI * PRIME           * REDUCE_D   :
-      return wesolowski_pr_dma_hash(FORM, MSG, spec.coefficient_size, &counter, fptr);
-
-    case WESOLOWSKI * PSEUDOPRIME     * NO_REDUCE_D:
-      return wesolowski_pp_hash(FORM, MSG, spec.coefficient_size, &counter, fptr);
-
-    case WESOLOWSKI * PSEUDOPRIME     * REDUCE_D   :
-      return wesolowski_pp_dma_hash(FORM, MSG, spec.coefficient_size, &counter, fptr);
-
-    case WESOLOWSKI * PSEUDOPRIME_MR2 * NO_REDUCE_D:
-      return wesolowski_pp_mr2_hash(FORM, MSG, spec.coefficient_size, &counter, fptr);
-
-    case WESOLOWSKI * PSEUDOPRIME_MR2 * REDUCE_D   :
-      return wesolowski_pp_mr2_dma_hash(FORM, MSG, spec.coefficient_size, &counter, fptr);
-
-   // case CLR     * PRIME           * NO_REDUCE_D:
-   //   return clr_sf_pr_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR     * PRIME           * REDUCE_D   :
-   //   return clr_sf_pr_dma_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR     * PSEUDOPRIME     * NO_REDUCE_D:
-   //   return clr_sf_pp_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR     * PSEUDOPRIME     * REDUCE_D   :
-   //   return clr_sf_pp_dma_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR     * PSEUDOPRIME_MR2 * NO_REDUCE_D:
-   //   return clr_sf_pp_mr2_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR     * PSEUDOPRIME_MR2 * REDUCE_D   :
-   //   return clr_sf_pp_dma_mr2_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR_LF     * PRIME           * NO_REDUCE_D:
-   //   return clr_lf_pr_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR_LF     * PRIME           * REDUCE_D   :
-   //   return clr_lf_pr_dma_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR_LF     * PSEUDOPRIME     * NO_REDUCE_D:
-   //   return clr_lf_pp_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR_LF     * PSEUDOPRIME     * REDUCE_D   :
-   //   return clr_lf_pp_dma_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR_LF     * PSEUDOPRIME_MR2 * NO_REDUCE_D:
-   //   return clr_lf_pp_mr2_hash(FORM, MSG, spec.n_small_primes, fptr);
-   //
-   // case CLR_LF     * PSEUDOPRIME_MR2 * REDUCE_D   :
-   //   return clr_lf_pp_dma_mr2_hash(FORM, MSG, spec.n_small_primes, fptr);
-
-    default:
-      fprintf(stderr, "unknown class group hash requested\n");
-      exit(1);
-      return 0;
+    return wesolowski_hash(spec, FORM, MSG, spec.coefficient_size, &counter, fptr);
+  }
+  else if (spec.algorithm == CLR_LF)
+  {
+    return clr_lf_hash(spec, FORM, MSG, spec.n_small_factors, fptr);
+  }
+  else if (spec.algorithm == CLR_SF)
+  {
+    return clr_sf_hash(spec, FORM, MSG, spec.n_small_factors, fptr);
+  }
+  else
+  {
+    fprintf(stderr, "unknown class group hash requested\n");
+    exit(1);
   }
 }
 
