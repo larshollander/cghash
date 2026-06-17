@@ -1,2 +1,2 @@
-# hashing-to-groups
-Contains implementations of cryptographic hash fucntions into groups. 
+# cghash
+Contains implementations of cryptographic hash fucntions into class groups of binary quadratic forms. 
