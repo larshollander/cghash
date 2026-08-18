@@ -35,7 +35,7 @@
 #define MIN_LF_SIZE     16
 #define MIN_FACTOR_SIZE 16
 
-#define DEBUG_HASH
+// #define DEBUG_HASH
 // #define DEBUG_SHAKE
 
 #define FORM a, b, discriminant
