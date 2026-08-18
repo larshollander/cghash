@@ -9,6 +9,7 @@
 #endif
 
 #include "testing.h"
+#include "discriminant_cache.h"
 
 #define D_LENGTH 4096
 #define D_BASE 10
@@ -321,12 +322,18 @@ int main(int argc, char** argv)
 
   if (args.n_discriminants == 0) { return 1; }
 
-  mpz_t discriminants[args.n_discriminants];
   AlgSpec specs[args.n_specs];
+  mpz_t discriminants[args.n_discriminants];
 
   if (!args.prompt_discriminant) 
-  { 
-    sample_discriminants(discriminants, args.n_discriminants, args.discriminant_size); 
+  {
+    size_t n_read = load_mpz_array_text("discriminants.cache", args.discriminant_size, discriminants, args.n_discriminants);
+
+    if (n_read < args.n_discriminants)
+    {
+      sample_discriminants(discriminants, n_read, args.n_discriminants, args.discriminant_size); 
+      save_mpz_array_text("discriminants.cache", args.discriminant_size, discriminants, args.n_discriminants);
+    }
   }
 
   if (!args.prompt_algorithm)

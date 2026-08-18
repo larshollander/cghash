@@ -15,39 +15,9 @@
 
 #include "class_group_hash_functions.h"
 
+// #define SHOW_PROGRESS
 // #define LOG_COUNTERS
 // #define LOG_COEFFICIENTS
-
-void sample_prime_discriminant(mpz_t discriminant, gmp_randstate_t state, int bit_length)
-{
-  do
-  {
-    mpz_urandomb(discriminant, state, bit_length);
-    mpz_setbit(discriminant, 0);
-    mpz_setbit(discriminant, 1);
-    mpz_setbit(discriminant, bit_length-1);
-  }
-  while (mpz_probab_prime_p(discriminant, 25) == 0);
-
-  mpz_neg(discriminant, discriminant);
-}
-
-void sample_discriminants(mpz_t* discriminants, int n_discriminants, int discriminant_size)
-{
-  gmp_randstate_t state;
-  gmp_randinit_default(state);
-
-  printf("\rdiscriminants sampled: 0/%d\n\033[A", n_discriminants);
-
-  for (int i = 0; i < n_discriminants; i++)
-  {
-    mpz_init(discriminants[i]);
-    sample_prime_discriminant(discriminants[i], state, discriminant_size);
-    printf("\rdiscriminants sampled: %d/%d\n\033[A", i + 1, n_discriminants);
-  }
-
-  printf("\n");
-}
 
 void test_discriminant(AlgSpec spec, mpz_t discriminant, int max_input, long* sum_counters, double* sum_times, int n_hashes, int n_done, FILE* fptr)
 {
@@ -71,7 +41,9 @@ void test_discriminant(AlgSpec spec, mpz_t discriminant, int max_input, long* su
     gmp_fprintf(fptr, "a = %Zd\nb = %Zd\n", a, b);
 #endif
 
+#ifdef SHOW_PROGRESS
     printf("\rvalues hashed: %d/%d\n\033[A", n_done + input + 1, n_hashes);
+#endif
   }
 
   double end = (double)clock();

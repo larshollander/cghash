@@ -213,6 +213,7 @@ forms.py
 plot_coefficients.py
 *.txt
 *.out
+*.png
 pt_test.c
 crt_test.c
 logs
