@@ -216,4 +216,3 @@ plot_coefficients.py
 *.png
 pt_test.c
 crt_test.c
-logs
