@@ -210,7 +210,9 @@ __marimo__/
 testing.py
 main.py
 forms.py
+plot_coefficients.py
 *.txt
 *.out
 pt_test.c
+crt_test.c
 logs

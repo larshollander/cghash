@@ -15,9 +15,6 @@
 
 #include "class_group_hash_functions.h"
 
-#define COEFFICIENT_SIZES 133, 266
-#define N_CS 2
-
 // #define LOG_COUNTERS
 // #define LOG_COEFFICIENTS
 
@@ -88,7 +85,7 @@ void set_names(char* filename, char* hashname, AlgSpec* spec)
 {
   switch (spec->algorithm)
   {
-    case WESOLOWSKI:
+    case SINGLE_FACTOR:
       strncpy(filename, "logs/", 5);
       strncpy(hashname, "", 0);
       filename += 5;
@@ -147,9 +144,7 @@ void set_names(char* filename, char* hashname, AlgSpec* spec)
 
     case NO_REDUCE_D:
       strncpy(filename, ".txt", 4);
-      strncpy(hashname, "", 0);
       filename += 4;
-      hashname += 0;
       break;
 
     default:
@@ -165,38 +160,26 @@ void test_algorithm(AlgSpec spec, mpz_t* discriminants, int n_discriminants, int
   int i, j;
 
   int n_hashes = max_input * n_discriminants;
-  int coefficient_sizes[N_CS] = { COEFFICIENT_SIZES };
   long sum_counters;
   double sum_times;
 
   char filename[30];
-  char hashname[26];
+  char hashname[21];
 
   set_names(filename, hashname, &spec);
 
   FILE* fptr = fopen(filename, "w");
 
-  printf("\n%s-%d\n", hashname, discriminant_size);
-  printf("len(a) | avg. #steps | avg. time (s)\n");
-
-  for (j = 0; j < N_CS; j++)
-  {
-    int coefficient_size = coefficient_sizes[j];
-
-    if (coefficient_size > discriminant_size/2 - 1) { break; }
-
-    spec.coefficient_size = coefficient_size;
-
-    sum_counters = 0;
-    sum_times = 0.0;
-
-    for (i = 0; i < n_discriminants; i++)
+  sum_counters = 0;
+  sum_times = 0.0;
+    
+  for (i = 0; i < n_discriminants; i++)
     {
       test_discriminant(spec, discriminants[i], max_input, &sum_counters, &sum_times, n_hashes, i * max_input, fptr);
     }
 
-    printf("%6d | %11ld | %13.2e\n", coefficient_size, sum_counters/n_hashes, sum_times/n_hashes);
-  }
+  printf("%20s | %6d | %6d | ", hashname, discriminant_size, spec.coefficient_size);
+  printf("%11ld | %13.2e\n", sum_counters/n_hashes, sum_times/n_hashes);
 
   fclose(fptr);
 }

@@ -13,16 +13,18 @@
 #define D_LENGTH 4096
 #define D_BASE 10
 
-#define MAX_ARGS_SKIPPED 4
+#define MAX_ARGS_SKIPPED 5
 
 typedef struct
 {
   int n_specs;
+  int max_input;
   int n_discriminants;
   int discriminant_size;
-  int max_input;
-  int prompt_discriminant;
+  int coefficient_size;
   int prompt_max_input;
+  int prompt_discriminant;
+  int prompt_csize;
   int prompt_algorithm;
 } Args;
 
@@ -49,6 +51,12 @@ void prompt_parameters(mpz_t discriminant, AlgSpec* spec, Args* args)
     args->discriminant_size = (int)mpz_sizeinbase(discriminant, 2);
   }
 
+  if (args->prompt_csize)
+  {
+    printf("coefficient size: ");
+    scanf("%d", &args->coefficient_size);
+  }
+
   if (args->prompt_max_input)
   {
     printf("number of inputs: ");
@@ -58,13 +66,13 @@ void prompt_parameters(mpz_t discriminant, AlgSpec* spec, Args* args)
   if (args->prompt_algorithm)
   {
     unsigned char buf[1];
-    printf("algorithm ([w]esolowski, [c]lr): ");
+    printf("algorithm ([s]ingle factor, [c]lr): ");
     scanf("%s", buf);
 
     switch (buf[0])
     {
-      case 'w':
-        spec->algorithm = WESOLOWSKI;
+      case 's':
+        spec->algorithm = SINGLE_FACTOR;
         break;
 
       case 'c':
@@ -110,6 +118,14 @@ void prompt_parameters(mpz_t discriminant, AlgSpec* spec, Args* args)
 
     if (spec->algorithm == CLR_SF)
     {
+      unsigned char buf[4];
+      printf("# of small factors: ");
+      scanf("%s", buf);
+      spec->n_small_factors = atoi(buf);
+    }
+
+    if (spec->algorithm == CLR_SF)
+    {
       unsigned char buf[1];
       printf("use large factor ([y]es, [n]o): ");
       scanf("%s", buf);
@@ -138,7 +154,7 @@ void prompt_parameters(mpz_t discriminant, AlgSpec* spec, Args* args)
 
 Args parse_args(int argc, char** argv)
 {
-  Args args = { 0, 0, 0, 0, 0, 0, 0 };
+  Args args = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
   args.n_specs = 1;
 
@@ -147,28 +163,37 @@ Args parse_args(int argc, char** argv)
     case 1:
       args.n_discriminants = 1;
       args.prompt_discriminant = 1;
+      args.prompt_csize = 1;
       args.prompt_max_input = 1;
       args.prompt_algorithm = 1;
       break;
 
     case 2:
-      args.n_discriminants = 1;
-      args.discriminant_size = atoi(argv[1]);
-      args.prompt_max_input = 1;
-      args.prompt_algorithm = 1;
+      fprintf(stderr, "not supported\n");
+      exit(1);
       break;
 
     case 3:
-      args.n_discriminants = atoi(argv[1]);
-      args.discriminant_size = atoi(argv[2]);
+      args.n_discriminants = 1;
+      args.discriminant_size = atoi(argv[1]);
+      args.coefficient_size = atoi(argv[2]);
       args.prompt_max_input = 1;
       args.prompt_algorithm = 1;
       break;
 
     case 4:
+      args.n_discriminants = atoi(argv[1]);
+      args.discriminant_size = atoi(argv[2]);
+      args.coefficient_size = atoi(argv[3]);
+      args.prompt_max_input = 1;
+      args.prompt_algorithm = 1;
+      break;
+
+    case 5:
       args.max_input = atoi(argv[1]);
       args.n_discriminants = atoi(argv[2]);
       args.discriminant_size = atoi(argv[3]);
+      args.coefficient_size = atoi(argv[4]);
       args.prompt_algorithm = 1;
       break;
 
@@ -176,7 +201,8 @@ Args parse_args(int argc, char** argv)
       args.max_input = atoi(argv[1]);
       args.n_discriminants = atoi(argv[2]);
       args.discriminant_size = atoi(argv[3]);
-      args.n_specs = argc - 4;
+      args.coefficient_size = atoi(argv[4]);
+      args.n_specs = argc - 5;
       break;
   }
 
@@ -189,13 +215,13 @@ AlgSpec parse_spec(char* buf)
   AlgSpec spec = { 0, 1, 1, 1, 0 };
 
   // algorithm (always): 
-  //   'w' for wesolowski, 
+  //   's' for single factor, 
   //   'c' for clr,
   //   else returns invalid spec
   switch (buf[i++])
   {
-    case 'w':
-      spec.algorithm = WESOLOWSKI;
+    case 's':
+      spec.algorithm = SINGLE_FACTOR;
       break;
 
     case 'c':
@@ -308,9 +334,16 @@ int main(int argc, char** argv)
     parse_specs(specs, argv, args.n_specs);
   }
 
+  for (i = 0; i < args.n_specs; i++)
+  {
+    specs[i].coefficient_size = args.coefficient_size;
+  }
+
   do
   {
     prompt_parameters(discriminants[0], &specs[0], &args);
+
+    printf("\n      hash algorithm | len(D) | len(a) | avg. #steps | avg. time (s)\n");
 
     for (i = 0; i < args.n_specs; i++)
     {

@@ -21,7 +21,7 @@
 #include "number_theory.h"
 #include "primetest.h"
 
-#define WESOLOWSKI       1
+#define SINGLE_FACTOR    1
 #define CLR_LF           2
 #define CLR_SF           3
 
@@ -35,7 +35,7 @@
 #define MIN_LF_SIZE     16
 #define MIN_FACTOR_SIZE 16
 
-// #define DEBUG_HASH
+#define DEBUG_HASH
 // #define DEBUG_SHAKE
 
 #define FORM a, b, discriminant
@@ -47,6 +47,15 @@
 #define S_OUT unsigned char* out, int out_len
 #define S_MSG unsigned char* msg, int msg_len
 #define S_CTR unsigned char* ctr, int ctr_len
+
+#define GET_A \
+  shake256(hash_value, coefficient_size/8 + 1, msg, msg_len, (unsigned char*)counter, counter_len, fptr);\
+  (*counter)++;\
+  mpz_import(a, coefficient_size/8 + 1, 1, 1, 0, 0, hash_value);\
+  for (int i = coefficient_size; i < coefficient_size + 8; i++) { mpz_clrbit(a, i); }\
+  swap_b = mpz_even_p(a);\
+  mpz_setbit(a, 0);\
+  mpz_setbit(a, 1);
 
 typedef struct
 {
@@ -75,17 +84,18 @@ void shake256(S_OUT, S_MSG, S_CTR, FILE* fptr)
   EVP_DigestInit_ex(ctx, EVP_shake256(), NULL);
   EVP_MD_CTX_set_params(ctx, params);
 
+  EVP_DigestUpdate(ctx, (unsigned char*) &msg_len, sizeof(msg_len));
   EVP_DigestUpdate(ctx, MSG);
   EVP_DigestUpdate(ctx, CTR);
   EVP_DigestFinalXOF(ctx, OUT);
 
 #ifdef DEBUG_SHAKE
-  fprintf(fptr, "\n");
   for (int i = 0; i < msg_len; i++) { fprintf(fptr, "%02hhx", msg[i]); }
   fprintf(fptr, " ");
   for (int i = 0; i < ctr_len; i++) { fprintf(fptr, "%02hhx", ctr[i]); }
   fprintf(fptr, "\n");
   for (int i = 0; i < out_len; i++) { fprintf(fptr, "%02hhx", out[i]); }
+  fprintf(fptr, "\n");
 #endif
 
   EVP_MD_CTX_free(ctx);
@@ -95,24 +105,17 @@ int pr_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fp
 {
   int counter_len = sizeof(*counter);
 
-  unsigned char hash_value[coefficient_size];
+  unsigned char hash_value[coefficient_size/8 + 1];
 
   int swap_b = 0;
 
 #ifdef DEBUG_SHAKE
-  fprintf(fptr, "\nmsg length: %d\nctr length: %d", msg_len, counter_len);
+  fprintf(fptr, "\nmsg length: %d\nctr length: %d\n", msg_len, counter_len);
 #endif
 
   do
   {
-    shake256(hash_value, coefficient_size/8, msg, msg_len, (unsigned char*)counter, counter_len, fptr);
-    (*counter)++;
-    
-    mpz_import(a, coefficient_size/8, 1, 1, 0, 0, hash_value);
-
-    swap_b = mpz_even_p(a);
-    mpz_setbit(a, 0);
-    mpz_setbit(a, 1);
+    GET_A
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
@@ -136,7 +139,7 @@ int pp_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fp
 {
   int counter_len = sizeof(*counter);
 
-  unsigned char hash_value[coefficient_size];
+  unsigned char hash_value[coefficient_size/8 + 1];
 
   int swap_b = 0;
 
@@ -144,19 +147,12 @@ int pp_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fp
   mpz_init(cmp);
 
 #ifdef DEBUG_SHAKE
-  fprintf(fptr, "\nmsg length: %d\nctr length: %d", msg_len, counter_len);
+  fprintf(fptr, "\nmsg length: %d\nctr length: %d\n", msg_len, counter_len);
 #endif
 
   do
   {
-    shake256(hash_value, coefficient_size/8, msg, msg_len, (unsigned char*)counter, counter_len, fptr);
-    (*counter)++;
-    
-    mpz_import(a, coefficient_size/8, 1, 1, 0, 0, hash_value);
-
-    swap_b = mpz_even_p(a);
-    mpz_setbit(a, 0);
-    mpz_setbit(a, 1);
+    GET_A
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
@@ -182,7 +178,7 @@ int pp_mr2_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE
 {
   int counter_len = sizeof(*counter);
 
-  unsigned char hash_value[coefficient_size];
+  unsigned char hash_value[coefficient_size/8 + 1];
 
   int swap_b = 0;
 
@@ -190,19 +186,12 @@ int pp_mr2_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE
   mpz_init(cmp);
 
 #ifdef DEBUG_SHAKE
-  fprintf(fptr, "\nmsg length: %d\nctr length: %d", msg_len, counter_len);
+  fprintf(fptr, "\nmsg length: %d\nctr length: %d\n", msg_len, counter_len);
 #endif
 
   do
   {
-    shake256(hash_value, coefficient_size/8, msg, msg_len, (unsigned char*)counter, counter_len, fptr);
-    (*counter)++;
-    
-    mpz_import(a, coefficient_size/8, 1, 1, 0, 0, hash_value);
-
-    swap_b = mpz_even_p(a);
-    mpz_setbit(a, 0);
-    mpz_setbit(a, 1);
+    GET_A
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
@@ -228,33 +217,34 @@ int pr_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE
 {
   int counter_len = sizeof(*counter);
 
-  unsigned char hash_value[coefficient_size];
+  unsigned char hash_value[coefficient_size/8 + 1];
 
+  int continue_used;
   int swap_b = 0;
 
   mpz_t d_mod_a;
   mpz_init(d_mod_a);
 
 #ifdef DEBUG_SHAKE
-  fprintf(fptr, "\nmsg length: %d\nctr length: %d", msg_len, counter_len);
+  fprintf(fptr, "\nmsg length: %d\nctr length: %d\n", msg_len, counter_len);
 #endif
 
   do
   {
-    shake256(hash_value, coefficient_size/8, msg, msg_len, (unsigned char*)counter, counter_len, fptr);
-    (*counter)++;
-    
-    mpz_import(a, coefficient_size/8, 1, 1, 0, 0, hash_value);
-
-    swap_b = mpz_even_p(a);
-    mpz_setbit(a, 0);
-    mpz_setbit(a, 1);
+    GET_A
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
+
+    continue_used = 0;
+
+    if (mpz_possible_prime(a) == 0) { continue_used = 1; continue; }
+
     mpz_mod(d_mod_a, discriminant, a);
+
+    if (mpz_jacobi(d_mod_a, a) != 1) { continue_used = 1; continue; }
   }
-  while (mpz_possible_prime(a) == 0 || mpz_jacobi(d_mod_a, a) != 1 || mpz_millerrabin(a, 25) == 0);
+  while (continue_used || mpz_millerrabin(a, 25) == 0);
 
   sqrt_mod_3_mod_4(b, d_mod_a, a);
   mpz_clear(d_mod_a);
@@ -274,8 +264,9 @@ int pp_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE
 {
   int counter_len = sizeof(*counter);
 
-  unsigned char hash_value[coefficient_size];
+  unsigned char hash_value[coefficient_size/8 + 1];
 
+  int continue_used;
   int swap_b = 0;
 
   mpz_t d_mod_a;
@@ -285,30 +276,28 @@ int pp_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE
   mpz_init(cmp);
 
 #ifdef DEBUG_SHAKE
-  fprintf(fptr, "\nmsg length: %d\nctr length: %d", msg_len, counter_len);
+  fprintf(fptr, "\nmsg length: %d\nctr length: %d\n", msg_len, counter_len);
 #endif
 
   do
   {
-    shake256(hash_value, coefficient_size/8, msg, msg_len, (unsigned char*)counter, counter_len, fptr);
-    (*counter)++;
-    
-    mpz_import(a, coefficient_size/8, 1, 1, 0, 0, hash_value);
-
-    swap_b = mpz_even_p(a);
-    mpz_setbit(a, 0);
-    mpz_setbit(a, 1);
+    GET_A
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
-    mpz_mod(d_mod_a, discriminant, a);
 
-    if (mpz_possible_prime(a) == 0 || mpz_jacobi(d_mod_a, a) != 1) { continue; }
+    continue_used = 0;
+
+    if (mpz_possible_prime(a) == 0) { continue_used = 1; continue; }
+
+    mpz_mod(d_mod_a, discriminant, a); 
+
+    if (mpz_jacobi(d_mod_a, a) != 1) { continue_used = 1; continue; }
 
     sqrt_mod_3_mod_4(b, d_mod_a, a);
     mpz_mul(cmp, b, b);
   }
-  while (!mpz_congruent_p(cmp, d_mod_a, a));
+  while (continue_used || !mpz_congruent_p(cmp, d_mod_a, a));
 
   mpz_clear(d_mod_a);
 
@@ -327,8 +316,9 @@ int pp_mr2_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, 
 {
   int counter_len = sizeof(*counter);
 
-  unsigned char hash_value[coefficient_size];
+  unsigned char hash_value[coefficient_size/8 + 1];
 
+  int continue_used;
   int swap_b = 0;
 
   mpz_t d_mod_a;
@@ -338,30 +328,29 @@ int pp_mr2_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, 
   mpz_init(cmp);
 
 #ifdef DEBUG_SHAKE
-  fprintf(fptr, "\nmsg length: %d\nctr length: %d", msg_len, counter_len);
+  fprintf(fptr, "\nmsg length: %d\nctr length: %d\n", msg_len, counter_len);
 #endif
 
   do
   {
-    shake256(hash_value, coefficient_size/8, msg, msg_len, (unsigned char*)counter, counter_len, fptr);
-    (*counter)++;
-    
-    mpz_import(a, coefficient_size/8, 1, 1, 0, 0, hash_value);
-
-    swap_b = mpz_even_p(a);
-    mpz_setbit(a, 0);
-    mpz_setbit(a, 1);
+    GET_A
 #ifdef DEBUG_HASH
     gmp_fprintf(fptr, "\n%Zd", a);
 #endif
-    mpz_mod(d_mod_a, discriminant, a);
 
-    if (mpz_possible_prime(a) == 0 || mpz_jacobi(d_mod_a, a) != 1 || millerrabin_base_2(a) == 0) { continue; }
+    continue_used = 0;
+
+    if (mpz_possible_prime(a) == 0) { continue_used = 1; continue; } 
+
+    mpz_mod(d_mod_a, discriminant, a); 
+
+    if (mpz_jacobi(d_mod_a, a) != 1) { continue_used = 1; continue; }
+    if (millerrabin_base_2(a) == 0) { continue_used = 1; continue; }
 
     sqrt_mod_3_mod_4(b, d_mod_a, a);
     mpz_mul(cmp, b, b);
   }
-  while (!mpz_congruent_p(cmp, d_mod_a, a));
+  while (continue_used || !mpz_congruent_p(cmp, d_mod_a, a));
 
   mpz_clear(d_mod_a);
 
@@ -376,27 +365,27 @@ int pp_mr2_dma_hash(S_FORM, S_MSG, int coefficient_size, unsigned int* counter, 
   return *counter;
 }
 
-int wesolowski_hash(AlgSpec spec, S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
+int single_factor_hash(AlgSpec spec, S_FORM, S_MSG, int coefficient_size, unsigned int* counter, FILE* fptr)
 {
   switch (spec.factor_type * spec.d_mod_a)
   {
-    case PRIME           * NO_REDUCE_D:
+    case PRIME                      :
       return pr_hash(FORM, MSG, coefficient_size, counter, fptr);
 
-    case PRIME           * REDUCE_D   :
+    case PRIME * REDUCE_D           :
       return pr_dma_hash(FORM, MSG, coefficient_size, counter, fptr);
 
-    case PSEUDOPRIME     * NO_REDUCE_D:
+    case PSEUDOPRIME                :
       return pp_hash(FORM, MSG, coefficient_size, counter, fptr);
 
-    case PSEUDOPRIME     * REDUCE_D   :
+    case PSEUDOPRIME * REDUCE_D     :
       return pp_dma_hash(FORM, MSG, coefficient_size, counter, fptr);
 
-    case PSEUDOPRIME_MR2 * NO_REDUCE_D:
+    case PSEUDOPRIME_MR2            :
       return pp_mr2_hash(FORM, MSG, coefficient_size, counter, fptr);
 
-    case PSEUDOPRIME_MR2 * REDUCE_D   :
-      return pp_mr2_dma_hash(FORM, MSG, coefficient_size, counter, fptr);
+    case PSEUDOPRIME_MR2 * REDUCE_D :
+      return pp_dma_hash(FORM, MSG, coefficient_size, counter, fptr);
 
     default:
       fprintf(stderr, "unknown class group hash requested\n");
@@ -421,16 +410,19 @@ int clr_lf_hash(AlgSpec spec, S_FORM, S_MSG, int n_small_factors, FILE* fptr)
   {
     do
     {
-      wesolowski_hash(spec, FORM, MSG, small_factor_size, &counter, fptr);
+      single_factor_hash(spec, FORM, MSG, small_factor_size, &counter, fptr);
     } while (all_coprime(a, as, i) == 0);
 
     mpz_init_set(as[i], a);
     mpz_init_set(bs[i], b);
   }
 
-  wesolowski_hash(spec, FORM, MSG, large_factor_size, &counter, fptr);
+  single_factor_hash(spec, FORM, MSG, large_factor_size, &counter, fptr);
+
   mpz_init_set(as[n_small_factors], a);
   mpz_init_set(bs[n_small_factors], b);
+
+  for (int i = 0; i < n_small_factors; i++) { mpz_mul(a, a, as[i]); }
 
 #ifdef DEBUG_HASH
   gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_factors, a);
@@ -440,6 +432,8 @@ int clr_lf_hash(AlgSpec spec, S_FORM, S_MSG, int n_small_factors, FILE* fptr)
   crt(a, b, as, bs, n_small_factors + 1);
 
   if (mpz_even_p(b)) { mpz_sub(b, a, b); }
+
+  mpz_mul_si(b, b, mpz_sgn(bs[0]));
 
   return counter;
 }
@@ -466,7 +460,7 @@ int clr_sf_hash(AlgSpec spec, S_FORM, S_MSG, int n_small_factors, FILE* fptr)
   {
     do
     {
-      wesolowski_hash(spec, FORM, MSG, small_factor_size, &counter, fptr);
+      single_factor_hash(spec, FORM, MSG, small_factor_size, &counter, fptr);
     } while (all_coprime(a, as, i) == 0);
 
     mpz_init_set(as[i], a);
@@ -475,20 +469,36 @@ int clr_sf_hash(AlgSpec spec, S_FORM, S_MSG, int n_small_factors, FILE* fptr)
 
   do 
   {
-    wesolowski_hash(spec, FORM, MSG, large_factor_size, &counter, fptr);
+    single_factor_hash(spec, FORM, MSG, large_factor_size, &counter, fptr);
   } while (all_coprime(a, as, n_small_factors) == 0);
 
   mpz_init_set(as[n_small_factors], a);
   mpz_init_set(bs[n_small_factors], b);
 
+  for (int i = 0; i < n_small_factors; i++) { mpz_mul(a, a, as[i]); }
+
 #ifdef DEBUG_HASH
-  gmp_fprintf(fptr, "  as[%d] = %Zd\n", n_small_factors, a);
-  gmp_fprintf(fptr, "  bs[%d] = %Zd\n", n_small_factors, b);
+  gmp_fprintf(fptr, "\n");
+
+  for (int i = 0; i <= n_small_factors; i++)
+  {
+    gmp_fprintf(fptr, "  as[%d] = %Zd\n", i, as[i]);
+    gmp_fprintf(fptr, "  bs[%d] = %Zd\n", i, bs[i]);
+  }
 #endif
 
   crt(a, b, as, bs, n_small_factors + 1);
 
+#ifdef DEBUG_HASH
+  gmp_fprintf(fptr, "\nhash done\n");
+
+  gmp_fprintf(fptr, "  a = %Zd\n", a);
+  gmp_fprintf(fptr, "  b = %Zd\n", b);
+#endif
+
   if (mpz_even_p(b)) { mpz_sub(b, a, b); }
+
+  mpz_mul_si(b, b, mpz_sgn(bs[0]));
 
   return counter;
 }
@@ -497,9 +507,9 @@ int hash_to_form(AlgSpec spec, S_FORM, S_MSG, FILE* fptr)
 {
   int counter = 0;
 
-  if (spec.algorithm == WESOLOWSKI)
+  if (spec.algorithm == SINGLE_FACTOR)
   {
-    return wesolowski_hash(spec, FORM, MSG, spec.coefficient_size, &counter, fptr);
+    return single_factor_hash(spec, FORM, MSG, spec.coefficient_size, &counter, fptr);
   }
   else if (spec.algorithm == CLR_LF)
   {

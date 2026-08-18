@@ -55,8 +55,8 @@ int all_coprime(mpz_t a, mpz_t* as, int n)
  * 
  * @param M Output mpz_t to store the product modulus
  * @param x Output mpz_t to store the result
- * @param a Array of residue values (mpz_t)
  * @param m Array of moduli (mpz_t)
+ * @param a Array of residue values (mpz_t)
  * @param n Number of congruences
  */
 void crt(mpz_t M, mpz_t x, const mpz_t *m, const mpz_t *a, size_t n) 
@@ -68,7 +68,7 @@ void crt(mpz_t M, mpz_t x, const mpz_t *m, const mpz_t *a, size_t n)
   mpz_init(yi);
   mpz_init(temp);
   
-  // Step 2: Apply CRT formula: x = Σ(a[i] * M[i] * y[i]) mod M
+  // Apply CRT formula: x = Σ(a[i] * M[i] * y[i]) mod M
   
   for (size_t i = 0; i < n; i++) 
   {
