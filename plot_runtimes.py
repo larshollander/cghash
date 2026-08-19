@@ -237,6 +237,13 @@ def plot_clr_speedup_heatmap(stats, output_path="clr_speedup_heatmap.png"):
     len_D_vals = sorted(set(k[2] for k in clr_stats.keys()))
     k_vals = sorted(set(k[1] for k in clr_stats.keys()))
 
+    pr_opt_k = {}
+
+    for len_d in len_D_vals:
+        pr_times = [(k, clr_stats.get(('clr-pr', k, len_d), {'mean': None})['mean']) 
+                   for k in set(k[1] for k in clr_stats.keys() if k[2] == len_d)]
+        pr_opt_k[len_d], _ = min(pr_times, key=lambda x: x[1] or float('inf'))
+
     # Extract baselines (clr-pr-3) and optimized versions
     baseline = np.zeros((len(len_D_vals), len(k_vals)))
     pp_dma = np.zeros((len(len_D_vals), len(k_vals)))
@@ -244,7 +251,7 @@ def plot_clr_speedup_heatmap(stats, output_path="clr_speedup_heatmap.png"):
     
     for di, len_d in enumerate(len_D_vals):
         for ki, k in enumerate(k_vals):
-            baseline[di, ki] = clr_stats[('clr-pr', 3, len_d)]['mean']
+            baseline[di, ki] = clr_stats[('clr-pr', pr_opt_k[len_d], len_d)]['mean']
             pp_dma[di, ki] = clr_stats[('clr-pp-dma', k, len_d)]['mean']
             mr2_dma[di, ki] = clr_stats[('clr-pp-mr2-dma', k, len_d)]['mean']
     
@@ -254,7 +261,7 @@ def plot_clr_speedup_heatmap(stats, output_path="clr_speedup_heatmap.png"):
     
     fig, axes = plt.subplots(1, 2, figsize=(15,5))
     
-    titles = ["clr-k-pp-dma vs clr-3-pr", "clr-k-pp-mr2-dma vs clr-3-pr"]
+    titles = ["clr-pp-dma vs clr-pr", "clr-pp-mr2-dma vs clr-pr"]
     arrays = [pp_speedup, mr2_speedup]
     
     for ax_idx, (ax, arr, title) in enumerate(zip(axes, arrays, titles)):
@@ -312,15 +319,20 @@ def print_summary_report(stats, data_groups):
     clr_keys = clr_stats.keys()
     if clr_stats:
         print("\n--- CLR HASHES (k>0) ---")
+
+        len_D_vals = sorted(set(k[2] for k in clr_keys))
         
-        # Best performing combination
-        best = min(clr_keys, key=lambda k: clr_stats[k]['mean'])
-        best = [k for k in stats.keys() if k[:3] == best][0]
-        print(f"\nBest overall: {best[0]} at k={best[1]}, len(D)={best[2]}")
-        print(f"  Time: {stats[best]['mean']:.6e}s, Steps: {data_groups['steps_by_params'].get((best[1], best[2], best[3]), [])[0] if data_groups['steps_by_params'].get((best[1], best[2], best[3])) else 'N/A'}")
+        # Best performing combinations
+        best = [min((k for k in clr_keys if k[2] == len_d), key=lambda k: clr_stats[k]['mean']) for len_d in len_D_vals]
+        best = [[k for k in stats.keys() if k[:3] == target][0] for target in best]
+
+        print(f"\nOptimal configurations:\n")
+
+        for k in best:
+            print(f"  {k[0]} at k={k[1]}, len(D)={k[2]}")
+            print(f"  Time: {int(stats[k]['mean'])} μs, Steps: {data_groups['steps_by_params'].get((k[1], k[2], k[3]), [])[0] if data_groups['steps_by_params'].get((k[1], k[2], k[3])) else 'N/A'}")
         
         # Optimal k per len(D)
-        len_D_vals = sorted(set(k[2] for k in clr_keys))
         print("\nOptimal k by len(D):")
         print(f"{'len(D)':>8} {'clr-pr':<8} {'clr-pp-dma':<12} {'clr-pp-mr2-dma':<16} {'Speedup':<9}")
         print("-" * 55)
@@ -343,7 +355,7 @@ def print_summary_report(stats, data_groups):
             baseline_t = clr_stats[('clr-pr', pr_opt_k, len_d)]['mean']
             speedup = (baseline_t - pp_opt_t) / baseline_t * 100
             
-            print(f"{len_d:>8} k={pr_opt_k:<6} k={pp_opt_k:<10} k={mr2_opt_k:<14} {'{speedup:<.1f}%':<9}")
+            print(f"{len_d:>8} k={pr_opt_k:<6} k={pp_opt_k:<10} k={mr2_opt_k:<14} {f'{speedup:<.1f}%':<9}")
     
     print("\n" + "=" * 70)
 
