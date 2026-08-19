@@ -65,13 +65,15 @@ void set_names(char* filename, char* hashname, AlgSpec* spec)
       break;
 
     case CLR_LF:
-      filename += snprintf(filename, 15, "logs/clr-%d-lf-", spec->n_small_factors);
-      hashname += snprintf(hashname, 10, "clr-%d-lf-", spec->n_small_factors);
+      filename += snprintf(filename, 12, "logs/clr-%d-", spec->n_small_factors);
+      strncpy(hashname, "clr-", 4);
+      hashname += 4;
       break;
 
     case CLR_SF:
-      filename += snprintf(filename, 15, "logs/clr-%d-sf-", spec->n_small_factors);
-      hashname += snprintf(hashname, 10, "clr-%d-sf-", spec->n_small_factors);
+      filename += snprintf(filename, 15, "logs/clr-sf-%d-", spec->n_small_factors);
+      strncpy(hashname, "clr-sf-", 7);
+      hashname += 7;
       break;
 
     default:
@@ -136,7 +138,7 @@ void test_algorithm(AlgSpec spec, mpz_t* discriminants, int n_discriminants, int
   double sum_times;
 
   char filename[30];
-  char hashname[21];
+  char hashname[18];
 
   set_names(filename, hashname, &spec);
 
@@ -150,7 +152,7 @@ void test_algorithm(AlgSpec spec, mpz_t* discriminants, int n_discriminants, int
       test_discriminant(spec, discriminants[i], max_input, &sum_counters, &sum_times, n_hashes, i * max_input, fptr);
     }
 
-  printf("%20s | %6d | %6d | ", hashname, discriminant_size, spec.coefficient_size);
+  printf("%17s | %1d | %6d | %6d | ", hashname, spec.n_small_factors, discriminant_size, spec.coefficient_size);
   printf("%11ld | %13.2e\n", sum_counters/n_hashes, sum_times/n_hashes);
 
   fclose(fptr);

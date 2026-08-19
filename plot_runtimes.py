@@ -1,346 +1,385 @@
 import re
-import numpy as np
-import matplotlib.pyplot as plt
+import sys
 
 from collections import defaultdict
 
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
+# ─────────────────────────────────────────────────────────
+# PARSING - Handle both formats automatically
+# ─────────────────────────────────────────────────────────
 def parse_results_file(filepath):
     """
-    Parse hash function benchmark results from the specified file.
+    Parse hash function benchmark results from either format:
+    - Old format: hash algorithm | len(D) | len(a) | avg. #steps | avg. time (s)
+    - New CLR format: hash algorithm | k | len(D) | len(a) | avg. #steps | avg. time (s)
     
     Returns:
-        times_by_algo: dict[(algorithm, len_D, len_a)] -> list of time values
-        steps_by_params: dict[(len_D, len_a)] -> list of step values
+        raw_data: list of dicts with all fields
     """
-    
-    times_by_algo = defaultdict(list)
-    steps_by_params = defaultdict(list)
+    raw_data = []
     
     with open(filepath, 'r') as f:
         content = f.read()
     
-    # Split into blocks (each block separated by empty lines)
+    # Split into blocks
     blocks = re.split(r'\n\s*\n', content.strip())
     
     for block in blocks:
         lines = [l.strip() for l in block.split('\n') if l.strip()]
         
-        # Skip header line
+        # Detect header to know field positions
+        header_line = lines[0]
+        fields = header_line.split('|')
+        
+        # Determine if k column exists
+        has_k = 'k' in header_line.lower() or len(fields) == 6
+        
         for line in lines[1:]:
             parts = line.split('|')
             if len(parts) >= 5:
-                algorithm = parts[0].strip()
-                len_D = int(parts[1].strip())
-                len_a = int(parts[2].strip())
-                avg_steps = int(parts[3].strip())
-                avg_time_str = parts[4].strip()
+                entry = {}
                 
-                # Convert scientific notation to float
-                avg_time = float(avg_time_str) * 10**6
+                if has_k:
+                    entry['algorithm'] = parts[0].strip()
+                    entry['k'] = int(parts[1].strip())
+                    entry['len_D'] = int(parts[2].strip())
+                    entry['len_a'] = int(parts[3].strip())
+                    entry['avg_steps'] = int(parts[4].strip())
+                    entry['avg_time'] = float(parts[5].strip()) * 10**6
+                else:
+                    entry['algorithm'] = parts[0].strip()
+                    entry['k'] = 0  # Default for single-factor
+                    entry['len_D'] = int(parts[1].strip())
+                    entry['len_a'] = int(parts[2].strip())
+                    entry['avg_steps'] = int(parts[3].strip())
+                    entry['avg_time'] = float(parts[4].strip()) * 10**6
                 
-                # Store raw values for averaging across runs
-                times_by_algo[(algorithm, len_D, len_a)].append(avg_time)
-                steps_by_params[(len_D, len_a)].append(avg_steps)
+                raw_data.append(entry)
     
-    return times_by_algo, steps_by_params
+    return raw_data
 
-
-def compute_statistics(times_by_algo, steps_by_params):
-    """
-    Compute mean and variability statistics for all parameter combinations.
+# Group data structures
+def group_raw_data(raw_data):
+    """Organize raw data for easy access."""
     
-    Returns:
-        times_stats: dict[(algorithm, len_D, len_a)] -> {'mean': float, 'std': float, 'count': int}
-        steps_stats: dict[(len_D, len_a)] -> {'mean': int, 'std': float, 'count': int}
-    """
+    # By algorithm type: single-factor vs CLR
+    single_factor = [d for d in raw_data if not d['algorithm'].startswith('clr-')]
+    clr = [d for d in raw_data if d['algorithm'].startswith('clr-')]
     
-    times_stats = {}
-    for key, values in times_by_algo.items():
-        times_stats[key] = {
-            'mean': np.mean(values),
-            'std': np.std(values),
-            'min': np.min(values),
-            'max': np.max(values),
-            'count': len(values)
-        }
+    # Time storage: (algorithm, k, len_D, len_a) -> list of times
+    times_by_config = defaultdict(list)
+    steps_by_params = defaultdict(list)  # (k, len_D, len_a) -> list of steps
     
-    steps_stats = {}
-    for key, values in steps_by_params.items():
-        steps_stats[key] = {
-            'mean': np.mean(values),
-            'std': np.std(values),
-            'min': np.min(values),
-            'max': np.max(values),
-            'count': len(values)
-        }
-    
-    return times_stats, steps_stats
-
-
-def print_summary(times_stats, steps_stats):
-    """Print a formatted summary of the results."""
-    
-    print("=" * 70)
-    print("HASH FUNCTION BENCHMARK RESULTS SUMMARY")
-    print("=" * 70)
-    
-    print("\n--- TIME STATISTICS BY ALGORITHM AND PARAMETERS ---")
-    print(f"{'Algorithm':<15} {'len(D)':>8} {'len(a)':>8} {'Mean Time(μs)':>14} {'Std Dev(μs)':>14} {'Runs':>6}")
-    print("-" * 70)
-    
-    sorted_times = sorted(times_stats.keys(), key=lambda k: (k[1], k[2], k[0]))
-    for algo, len_d, len_a in sorted_times:
-        stats = times_stats[(algo, len_d, len_a)]
-        print(f"{algo:<15} {len_d:>8} {len_a:>8} {stats['mean']:.6e} {stats['std']:.6e} {stats['count']:>6}")
-    
-    print("\n--- STEP COUNT STATISTICS BY PARAMETERS ---")
-    print(f"{'len(D)':>8} {'len(a)':>8} {'Mean Steps':>12} {'Std Dev':>12} {'Runs':>6}")
-    print("-" * 70)
-    
-    sorted_steps = sorted(steps_stats.keys(), key=lambda k: (k[0], k[1]))
-    for len_d, len_a in sorted_steps:
-        stats = steps_stats[(len_d, len_a)]
-        print(f"{len_d:>8} {len_a:>8} {stats['mean']:>10.1f} {stats['std']:>10.1f} {stats['count']:>6}")
-
-
-# Alternative: Return as numpy arrays for further processing
-def convert_to_numpy_arrays(times_stats, steps_stats):
-    """
-    Convert stats dictionaries to numpy-friendly structured arrays.
-    
-    Useful for plotting with matplotlib/seaborn or saving to CSV/Parquet.
-    """
-    
-    # Time array: [algo_idx, len_D, len_a] -> mean_time
-    algorithms = sorted(set(k[0] for k in times_stats.keys()))
-    len_D_values = sorted(set(k[1] for k in times_stats.keys()))
-    len_a_values = sorted(set(k[2] for k in times_stats.keys()))
-    
-    algo_to_idx = {a: i for i, a in enumerate(algorithms)}
-    len_D_to_idx = {d: i for i, d in enumerate(len_D_values)}
-    len_a_to_idx = {a: i for i, a in enumerate(len_a_values)}
-    
-    time_means = np.zeros((len(algorithms), len(len_D_values), len(len_a_values)))
-    time_stds = np.zeros((len(algorithms), len(len_D_values), len(len_a_values)))
-    
-    for key, stats in times_stats.items():
-        algo, len_d, len_a = key
-        time_means[algo_to_idx[algo], len_D_to_idx[len_d], len_a_to_idx[len_a]] = stats['mean']
-        time_stds[algo_to_idx[algo], len_D_to_idx[len_d], len_a_to_idx[len_a]] = stats['std']
-    
-    # Step count array: [len_D, len_a] -> mean_steps
-    steps_means = np.zeros((len(len_D_values), len(len_a_values)))
-    steps_stds = np.zeros((len(len_D_values), len(len_a_values)))
-    
-    for key, stats in steps_stats.items():
-        len_d, len_a = key
-        steps_means[len_D_to_idx[len_d], len_a_to_idx[len_a]] = stats['mean']
-        steps_stds[len_D_to_idx[len_d], len_a_to_idx[len_a]] = stats['std']
+    for d in raw_data:
+        key = (d['algorithm'], d['k'], d['len_D'], d['len_a'])
+        times_by_config[key].append(d['avg_time'])
+        step_key = (d['k'], d['len_D'], d['len_a'])
+        steps_by_params[step_key].append(d['avg_steps'])
     
     return {
-        'algorithms': algorithms,
-        'len_D': len_D_values,
-        'len_a': len_a_values,
-        'time_means': time_means,
-        'time_stds': time_stds,
-        'step_means': steps_means,
-        'step_stds': steps_stds
+        'single_factor': single_factor,
+        'clr': clr,
+        'times_by_config': times_by_config,
+        'steps_by_params': steps_by_params
     }
 
-ALGO_COLORS = {
-    "pr":          "#e74c3c",
-    "pr-dma":      "#e67e22",
-    "pp":          "#3498db",
-    "pp-dma":      "#2ecc71",
-    "pp-mr2":      "#9b59b6",
-    "pp-mr2-dma":  "#1abc9c",
-}
+def compute_statistics(data_groups):
+    """Compute mean/std/min/max/count for all configurations."""
+    
+    stats = {}
+    for key, values in data_groups['times_by_config'].items():
+        stats[key] = {
+            'mean': np.mean(values),
+            'std': np.std(values),
+            'min': np.min(values),
+            'max': np.max(values),
+            'count': len(values)
+        }
+    
+    return stats
 
 # ─────────────────────────────────────────────────────────
-# 1. Grouped bar chart: avg. time vs len(a), one panel per len(D)
+# SINGLE-FACTOR VISUALIZATIONS (original functionality preserved)
 # ─────────────────────────────────────────────────────────
-def plot_time_grouped_bars(numpy_data):
-    algorithms = numpy_data["algorithms"]
-    len_D_vals = numpy_data["len_D"]
-    len_a_vals = numpy_data["len_a"]
-    means      = numpy_data["time_means"]   # (n_algos, n_D, n_a)
-    stds       = numpy_data["time_stds"]
-
+def plot_single_factor_grouped_bars(stats, output_path="single_factor_bars.png"):
+    """Time vs len(a), grouped by algorithm, one panel per len(D)."""
+    
+    # Filter single-factor only (k=0)
+    sf_stats = {k: v for k, v in stats.items() if k[1] == 0}
+    if not sf_stats:
+        print("No single-factor data found")
+        return None
+    
+    algorithms = sorted(set(k[0] for k in sf_stats.keys()))
+    len_D_vals = sorted(set(k[2] for k in sf_stats.keys()))
+    len_a_vals = sorted(set(k[3] for k in sf_stats.keys()))
+    
     n_algos = len(algorithms)
     bar_w = 0.13
     x = np.arange(len(len_a_vals))
-
-    fig, axes = plt.subplots(1, len(len_D_vals), figsize=(5 * len(len_D_vals), 5),
-                             sharey=False)
-
+    
+    fig, axes = plt.subplots(1, len(len_D_vals), sharey=False)
+    if len(len_D_vals) == 1:
+        axes = [axes]
+    
+    ALGO_COLORS = {
+        "pr": "#e74c3c", "pr-dma": "#e67e22",
+        "pp": "#3498db", "pp-dma": "#2ecc71",
+        "pp-mr2": "#9b59b6", "pp-mr2-dma": "#1abc9c"
+    }
+    
     for ax_idx, len_d in enumerate(len_D_vals):
         ax = axes[ax_idx]
         for i, algo in enumerate(algorithms):
             offsets = (i - n_algos / 2) * bar_w + bar_w / 2
-            ax.bar(x + offsets, means[i, ax_idx],
-                   width=bar_w, yerr=stds[i, ax_idx],
-                   capsize=2, label=algo,
-                   color=ALGO_COLORS.get(algo, None))
+            means = np.array([sf_stats[(algo, 0, len_d, la)]['mean'] 
+                            for la in len_a_vals])
+            stds = np.array([sf_stats[(algo, 0, len_d, la)]['std'] 
+                           for la in len_a_vals])
+            ax.bar(x + offsets, means, width=bar_w, yerr=stds, capsize=2,
+                   label=algo, color=ALGO_COLORS.get(algo, None))
         ax.set_title(f"len(D) = {len_d}")
         ax.set_xlabel("len(a)")
         ax.set_xticks(x)
         ax.set_xticklabels(len_a_vals)
         if ax_idx == 0:
             ax.set_ylabel("Avg. time (μs)")
-
-    # Single legend at top
-    fig.legend(*axes[0].get_legend_handles_labels(),
-               loc="upper center", ncol=n_algos,
-               bbox_to_anchor=(0.5, 1.06), frameon=False)
-
-    fig.suptitle("Hash function time by algorithm and len(a)", y=1.02)
+    
+    fig.legend(*axes[0].get_legend_handles_labels(), loc="upper center",
+               ncol=n_algos, bbox_to_anchor=(0.5, 1.06), frameon=False)
+    fig.suptitle("Single-Factor Hash Time by Algorithm and len(a)", y=1.02)
     fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
     return fig
 
-
 # ─────────────────────────────────────────────────────────
-# 2. Line chart: avg. step count vs len(a), one line per len(D)
+# CLR-SPECIFIC VISUALIZATIONS
 # ─────────────────────────────────────────────────────────
-def plot_steps_line(numpy_data):
-    len_D_vals = numpy_data["len_D"]
-    len_a_vals = numpy_data["len_a"]
-    step_means = numpy_data["step_means"]  # (n_D, n_a)
-    step_stds  = numpy_data["step_stds"]
-
-    fig, ax = plt.subplots(figsize=(7, 4.5))
-
-    for j, len_d in enumerate(len_D_vals):
-        ax.errorbar(len_a_vals, step_means[j], yerr=step_stds[j],
-                    marker="o", capsize=4, linewidth=2,
-                    label=f"len(D) = {len_d}")
-
-    ax.set_xlabel("len(a)")
-    ax.set_ylabel("Avg. number of steps")
-    ax.set_title("Step count vs len(a)")
-    ax.legend(frameon=True)
-    ax.grid(True, alpha=0.3)
-    fig.tight_layout()
-    return fig
-
-
-# ─────────────────────────────────────────────────────────
-# 3. Heatmap: speedup (%) of each algorithm vs baseline
-#    Rows = algorithms, columns = (len(D), len(a)) combos
-# ─────────────────────────────────────────────────────────
-def plot_speedup_heatmap(numpy_data, baseline_algo):
-    algorithms = numpy_data["algorithms"]
-    len_D_vals = numpy_data["len_D"]
-    len_a_vals = numpy_data["len_a"]
-    means      = numpy_data["time_means"]
-
-    bl_idx = algorithms.index(baseline_algo)
-    baseline = means[bl_idx]                      # (n_D, n_a)
-    speedup_pct = (baseline[None, :, :] - means) / baseline[None, :, :] * 100
-
-    # Flatten (len_D, len_a) into column labels
-    col_labels = [f"D={d}, a={a}" for d in len_D_vals for a in len_a_vals]
-    row_labels = [a for a in algorithms if a != baseline_algo]
-    non_bl_mask = np.array([a != baseline_algo for a in algorithms])
-    data = speedup_pct[non_bl_mask].reshape(non_bl_mask.sum(), -1)
-
-    fig, ax = plt.subplots(figsize=(10, 4))
-    limit = max(data.max(), -data.min())
-    im = ax.imshow(data, cmap="RdYlGn", aspect="auto",
-                   vmin=-limit, vmax=limit)
-
-    ax.set_xticks(np.arange(len(col_labels)))
-    ax.set_xticklabels(col_labels, rotation=45, ha="right")
-    ax.set_yticks(np.arange(len(row_labels)))
-    ax.set_yticklabels(row_labels)
-
-    # Annotate cells
-    for i in range(data.shape[0]):
-        for j in range(data.shape[1]):
-            ax.text(j, i, f"{data[i,j]:.1f}%",
-                    ha="center", va="center", fontsize=7,
-                    color="white" if abs(data[i, j]) > data.max()*0.6 else "black")
-
-    ax.set_title("Speedup vs baseline (%)")
-    fig.colorbar(im, ax=ax, label="Speedup (%)", shrink=0.8)
-    fig.tight_layout()
-    return fig
-
-
-# ─────────────────────────────────────────────────────────
-# 4. Box plot: variability across runs (needs multiple runs)
-#    Pass the raw times_by_algo dict, pick a specific len(D)
-# ─────────────────────────────────────────────────────────
-def plot_variability_box(times_by_algo, len_d):
+def plot_clr_time_vs_k(stats, output_path="clr_time_vs_k.png"):
     """
-    Box plot of raw time values per algorithm at a fixed len(D).
-    Only meaningful when you have multiple runs per config.
+    CLR time vs k, with separate lines for each algorithm variant,
+    grouped by len(D). Shows which k is optimal and compares implementations.
     """
-    # Find all len_a values for this len_d
-    len_a_set = sorted({k[2] for k in times_by_algo if k[1] == len_d})
-    algorithms = sorted({k[0] for k in times_by_algo})
-
-    fig, ax = plt.subplots(figsize=(9, 5))
-
-    positions = []
-    box_data = []
-    labels = []
-    pos = 0
-
-    for len_a in len_a_set:
+    
+    # Filter CLR only (k > 0)
+    clr_stats = {k[:3]: v for k, v in stats.items() if k[1] > 0 and k[0].startswith('clr-')}
+    if not clr_stats:
+        print("No CLR data found")
+        return None
+    
+    algorithms = sorted(set(k[0] for k in clr_stats.keys()))
+    len_D_vals = sorted(set(k[2] for k in clr_stats.keys()))
+    k_vals = sorted(set(k[1] for k in clr_stats.keys()))
+    
+    CLR_COLORS = {"clr-pr": "#e74c3c", "clr-pp-dma": "#2ecc71", "clr-pp-mr2-dma": "#1abc9c"}
+    
+    fig, axes = plt.subplots(1, len(len_D_vals), sharey=True, figsize=(12,5), layout='constrained')
+    if len(len_D_vals) == 1:
+        axes = [axes]
+    
+    for ax_idx, len_d in enumerate(len_D_vals):
+        ax = axes[ax_idx]
         for algo in algorithms:
-            vals = times_by_algo.get((algo, len_d, len_a), [])
-            if len(vals) >= 2:  # need ≥2 runs for a box
-                box_data.append(vals)
-                positions.append(pos)
-                labels.append(f"{algo}\na={len_a}")
-                pos += 1
-        pos += 0.5  # gap between len(a) groups
-
-    if not box_data:
-        ax.text(0.5, 0.5, "Not enough runs for box plots (need ≥2 per config)",
-                ha="center", va="center", transform=ax.transAxes, fontsize=12)
-    else:
-        bp = ax.boxplot(box_data, positions=positions, widths=0.7,
-                        patch_artist=True, showmeans=True,
-                        meanprops=dict(marker="D", markerfacecolor="white",
-                                       markeredgecolor="black", markersize=5))
-        for patch, algo in zip(
-                [p for p in bp["boxes"]],
-                [lbl.split("\n")[0] for lbl in labels]):
-            patch.set_facecolor(ALGO_COLORS.get(algo, "grey"))
-            patch.set_alpha(0.7)
-
-        ax.set_xticks(positions)
-        ax.set_xticklabels(labels, fontsize=7)
+            times = np.array([clr_stats[(algo, k, len_d)]['mean'] 
+                            if isinstance(clr_stats.get((algo, k, len_d)), dict)
+                            else clr_stats[(algo, k, len_d)]['mean']
+                            for k in k_vals])
+            stds = np.array([clr_stats[(algo, k, len_d)]['std'] for k in k_vals])
+            
+            marker = 'o' if algo == "clr-pr" else 's'
+            ax.plot(k_vals, times, marker=marker, linewidth=2, markersize=8,
+                   label=algo.replace('clr-', ''), color=CLR_COLORS.get(algo, None))
+            
+            # Highlight min point
+            min_k = k_vals[np.argmin(times)]
+            min_val = np.min(times)
+            ax.scatter(min_k, min_val, s=150, zorder=5, marker='*',
+                      color='gold', edgecolor='black', linewidth=1.5)
+        
+        ax.set_title(f"len(D) = {len_d}")
+        ax.set_xlabel("k (number of small factors)")
         ax.set_ylabel("Avg. time (μs)")
-        ax.set_title(f"Run-to-run variability at len(D) = {len_d}")
-
+        ax.set_xticks(k_vals)
+        ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Legend using first axis
+    handles = []
+    labels = []
+    for algo in algorithms:
+        h = plt.Line2D([], [], marker='o', color=CLR_COLORS.get(algo, None),
+                      linewidth=2, markersize=8, label=algo.replace('clr-', ''))
+        handles.append(h)
+        labels.append(algo.replace('clr-', ''))
+    
+    fig.legend(handles, labels, loc="lower left", ncol=len(algorithms))
+    #,
+    #          bbox_to_anchor=(0.5, 1.05), frameon=True, fancybox=True)
+    
+    fig.suptitle("CLR Hash Time vs k (star marks optimum per curve)", y=1.02)
     fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
     return fig
 
+def plot_clr_speedup_heatmap(stats, output_path="clr_speedup_heatmap.png"):
+    """
+    Heatmap showing speedup (%) of clr-pp-dma and clr-pp-mr2-dma
+    vs clr-pr baseline across k and len(D).
+    """
+    
+    clr_stats = {k[:3]: v for k, v in stats.items() if k[1] > 0 and k[0].startswith('clr-')}
+    if not clr_stats:
+        print("No CLR data found")
+        return None
+    
+    len_D_vals = sorted(set(k[2] for k in clr_stats.keys()))
+    k_vals = sorted(set(k[1] for k in clr_stats.keys()))
 
+    # Extract baselines (clr-pr-3) and optimized versions
+    baseline = np.zeros((len(len_D_vals), len(k_vals)))
+    pp_dma = np.zeros((len(len_D_vals), len(k_vals)))
+    mr2_dma = np.zeros((len(len_D_vals), len(k_vals)))
+    
+    for di, len_d in enumerate(len_D_vals):
+        for ki, k in enumerate(k_vals):
+            baseline[di, ki] = clr_stats[('clr-pr', 3, len_d)]['mean']
+            pp_dma[di, ki] = clr_stats[('clr-pp-dma', k, len_d)]['mean']
+            mr2_dma[di, ki] = clr_stats[('clr-pp-mr2-dma', k, len_d)]['mean']
+    
+    # Compute speedup (%)
+    pp_speedup = (baseline - pp_dma) / baseline * 100
+    mr2_speedup = (baseline - mr2_dma) / baseline * 100
+    
+    fig, axes = plt.subplots(1, 2, figsize=(15,5))
+    
+    titles = ["clr-k-pp-dma vs clr-3-pr", "clr-k-pp-mr2-dma vs clr-3-pr"]
+    arrays = [pp_speedup, mr2_speedup]
+    
+    for ax_idx, (ax, arr, title) in enumerate(zip(axes, arrays, titles)):
+        limit = max(np.max(arr), -np.min(arr))*1.1
+        im = ax.imshow(arr, cmap="RdYlGn", aspect="auto",
+                       vmin=-limit, vmax=limit)
+        
+        # Y-axis: len(D)
+        ax.set_yticks(np.arange(len(len_D_vals)))
+        ax.set_yticklabels([f"{d}" for d in len_D_vals])
+        
+        # X-axis: k
+        ax.set_xticks(np.arange(len(k_vals)))
+        ax.set_xticklabels(k_vals)
+        ax.set_xlabel("k")
+        
+        # Annotate cells
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
+                val = arr[i, j]
+                ax.text(j, i, f"{val:.1f}%", ha="center", va="center",
+                       fontsize=9, color="black")
+        
+        ax.set_title(title)
+        fig.colorbar(im, ax=ax, shrink=0.8)
+    
+    fig.suptitle("CLR Optimization Speedup vs Baseline (%)", y=1.02)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    return fig
+
+# ─────────────────────────────────────────────────────────
+# SUMMARY REPORT
+# ─────────────────────────────────────────────────────────
+def print_summary_report(stats, data_groups):
+    """Print a human-readable summary of findings."""
+    
+    print("=" * 70)
+    print("HASH FUNCTION BENCHMARK SUMMARY REPORT")
+    print("=" * 70)
+    
+    # Single-factor section
+    sf_keys = [k for k in stats if k[1] == 0]
+    if sf_keys:
+        print("\n--- SINGLE-FACTOR HASHES (k=0) ---")
+        print(f"{'Algorithm':<18} {'len(D)':>8} {'len(a)':>8} {'Mean Time (μs)':>16} {'Std Dev':>9}")
+        print("-" * 70)
+        for key in sorted(sf_keys, key=lambda x: (x[2], x[3], x[0]))[:24]:  # Limit output
+            algo, k, len_d, len_a = key
+            s = stats[key]
+            print(f"{algo:<18} {len_d:>8} {len_a:>8} {s['mean']:16.3f} {s['std']:9.3f}")
+    
+    # CLR section
+    clr_stats = {k[:3]: v for k, v in stats.items() if k[1] > 0 and k[0].startswith('clr-')}
+    clr_keys = clr_stats.keys()
+    if clr_stats:
+        print("\n--- CLR HASHES (k>0) ---")
+        
+        # Best performing combination
+        best = min(clr_keys, key=lambda k: clr_stats[k]['mean'])
+        best = [k for k in stats.keys() if k[:3] == best][0]
+        print(f"\nBest overall: {best[0]} at k={best[1]}, len(D)={best[2]}")
+        print(f"  Time: {stats[best]['mean']:.6e}s, Steps: {data_groups['steps_by_params'].get((best[1], best[2], best[3]), [])[0] if data_groups['steps_by_params'].get((best[1], best[2], best[3])) else 'N/A'}")
+        
+        # Optimal k per len(D)
+        len_D_vals = sorted(set(k[2] for k in clr_keys))
+        print("\nOptimal k by len(D):")
+        print(f"{'len(D)':>8} {'clr-pr':<8} {'clr-pp-dma':<12} {'clr-pp-mr2-dma':<16} {'Speedup':<9}")
+        print("-" * 55)
+            
+        for len_d in len_D_vals:
+            keys_at_d = [(k, clr_stats[k]) for k in clr_keys if k[2] == len_d]
+            
+            pr_times = [(k, clr_stats.get(('clr-pr', k, len_d), {'mean': None})['mean']) 
+                       for k in set(k[1] for k in clr_keys if k[2] == len_d)]
+            pr_opt_k, pr_opt_t = min(pr_times, key=lambda x: x[1] or float('inf'))
+
+            pp_times = [(k, clr_stats.get(('clr-pp-dma', k, len_d), {'mean': None})['mean']) 
+                       for k in set(k[1] for k in clr_keys if k[2] == len_d)]
+            pp_opt_k, pp_opt_t = min(pp_times, key=lambda x: x[1] or float('inf'))
+            
+            mr2_times = [(k, clr_stats.get(('clr-pp-mr2-dma', k, len_d), {'mean': None})['mean'])
+                        for k in set(k[1] for k in clr_keys if k[2] == len_d)]
+            mr2_opt_k, mr2_opt_t = min(mr2_times, key=lambda x: x[1] or float('inf'))
+
+            baseline_t = clr_stats[('clr-pr', pr_opt_k, len_d)]['mean']
+            speedup = (baseline_t - pp_opt_t) / baseline_t * 100
+            
+            print(f"{len_d:>8} k={pr_opt_k:<6} k={pp_opt_k:<10} k={mr2_opt_k:<14} {'{speedup:<.1f}%':<9}")
+    
+    print("\n" + "=" * 70)
+
+# ─────────────────────────────────────────────────────────
+# MAIN DRIVER
+# ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    filename = "results.txt"
-
-    # Parse raw data
-    times_by_algo, steps_by_params = parse_results_file(filename)
+    # Parse file (handles both old and new formats automatically)
+    filepath = sys.argv[1]
     
-    # Compute statistics
-    times_stats, steps_stats = compute_statistics(times_by_algo, steps_by_params)
+    print(f"Parsing {filepath}...")
+    raw_data = parse_results_file(filepath)
+    print(f"Found {len(raw_data)} entries")
     
-    # Optionally convert to numpy arrays for further analysis
-    numpy_data = convert_to_numpy_arrays(times_stats, steps_stats)
-
-    fig1 = plot_time_grouped_bars(numpy_data)
-    fig1.savefig("time_grouped_bars.png", dpi=150, bbox_inches="tight")
-
-    fig2 = plot_steps_line(numpy_data)
-    fig2.savefig("steps_vs_len_a.png", dpi=150, bbox_inches="tight")
-
-    fig3 = plot_speedup_heatmap(numpy_data, "pr")
-    fig3.savefig("speedup_heatmap.png", dpi=150, bbox_inches="tight")
-
-    fig4 = plot_variability_box(times_by_algo, len_d=2048)
-    fig4.savefig("variability_box_D2048.png", dpi=150, bbox_inches="tight")
-
+    # Organize and compute statistics
+    data_groups = group_raw_data(raw_data)
+    stats = compute_statistics(data_groups)
+    
+    # Print summary
+    print_summary_report(stats, data_groups)
+    
+    # Generate visualizations
+    print("\nGenerating visualizations...")
+    
+    # Single-factor (if present)
+    if data_groups['single_factor']:
+        plot_single_factor_grouped_bars(stats, "single_factor_bars.png")
+        print("  ✓ single_factor_bars.png")
+    
+    # CLR-specific
+    if data_groups['clr']:
+        plot_clr_time_vs_k(stats, "clr_time_vs_k.png")
+        print("  ✓ clr_time_vs_k.png")
+        
+        plot_clr_speedup_heatmap(stats, "clr_speedup_heatmap.png")
+        print("  ✓ clr_speedup_heatmap.png")
+        
     plt.show()
+    print("\nDone!")

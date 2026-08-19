@@ -350,7 +350,7 @@ int main(int argc, char** argv)
   {
     prompt_parameters(discriminants[0], &specs[0], &args);
 
-    printf("\n      hash algorithm | len(D) | len(a) | avg. #steps | avg. time (s)\n");
+    printf("\n   hash algorithm | k | len(D) | len(a) | avg. #steps | avg. time (s)\n");
 
     for (i = 0; i < args.n_specs; i++)
     {
