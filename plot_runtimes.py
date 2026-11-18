@@ -104,8 +104,8 @@ def compute_statistics(data_groups):
 # ─────────────────────────────────────────────────────────
 # SINGLE-FACTOR VISUALIZATIONS (original functionality preserved)
 # ─────────────────────────────────────────────────────────
-def plot_single_factor_grouped_bars(stats, output_path="single_factor_bars.png"):
-    """Time vs len(a), grouped by algorithm, one panel per len(D)."""
+def plot_single_factor_grouped_bars(stats, output_paths=["single_factor_bars.png"]):
+    """Time vs len(a), grouped by algorithm, one figure per len(D)."""
     
     # Filter single-factor only (k=0)
     sf_stats = {k: v for k, v in stats.items() if k[1] == 0}
@@ -121,9 +121,7 @@ def plot_single_factor_grouped_bars(stats, output_path="single_factor_bars.png")
     bar_w = 0.13
     x = np.arange(len(len_a_vals))
     
-    fig, axes = plt.subplots(1, len(len_D_vals), sharey=False)
-    if len(len_D_vals) == 1:
-        axes = [axes]
+    figs = []
     
     ALGO_COLORS = {
         "pr": "#e74c3c", "pr-dma": "#e67e22",
@@ -131,8 +129,8 @@ def plot_single_factor_grouped_bars(stats, output_path="single_factor_bars.png")
         "pp-mr2": "#9b59b6", "pp-mr2-dma": "#1abc9c"
     }
     
-    for ax_idx, len_d in enumerate(len_D_vals):
-        ax = axes[ax_idx]
+    for idx, len_d in enumerate(len_D_vals):
+        fig, ax = plt.subplots(1,1)
         for i, algo in enumerate(algorithms):
             offsets = (i - n_algos / 2) * bar_w + bar_w / 2
             means = np.array([sf_stats[(algo, 0, len_d, la)]['mean'] 
@@ -141,18 +139,17 @@ def plot_single_factor_grouped_bars(stats, output_path="single_factor_bars.png")
                            for la in len_a_vals])
             ax.bar(x + offsets, means, width=bar_w, yerr=stds, capsize=2,
                    label=algo, color=ALGO_COLORS.get(algo, None))
-        ax.set_title(f"len(D) = {len_d}")
-        ax.set_xlabel("len(a)")
         ax.set_xticks(x)
         ax.set_xticklabels(len_a_vals)
-        if ax_idx == 0:
-            ax.set_ylabel("Avg. time (μs)")
-    
-    fig.legend(*axes[0].get_legend_handles_labels(), loc="upper center",
-               ncol=n_algos, bbox_to_anchor=(0.5, 1.06), frameon=False)
-    fig.suptitle("Single-Factor Hash Time by Algorithm and len(a)", y=1.02)
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        ax.set_ylabel("Avg. time (μs)")
+        ax.legend()
+#        fig.legend(ax.get_legend_handles_labels(), loc="upper center",
+#                   ncol=n_algos, bbox_to_anchor=(0.5, 1.06), frameon=False)
+        fig.suptitle(f"Single-Factor Hash Time by Algorithm for len(D) = {len_d}", y=1.02)
+        fig.tight_layout()
+        fig.savefig(output_paths[idx], dpi=150, bbox_inches="tight")
+        figs.append(fig)
+
     return fig
 
 # ─────────────────────────────────────────────────────────
@@ -201,7 +198,7 @@ def plot_clr_time_vs_k(stats, output_path="clr_time_vs_k.png"):
         
         ax.set_title(f"len(D) = {len_d}")
         ax.set_xlabel("k (number of small factors)")
-        ax.set_ylabel("Avg. time (μs)")
+        if ax_idx == 0: ax.set_ylabel("Avg. time (μs)")
         ax.set_xticks(k_vals)
         ax.grid(True, alpha=0.3, linestyle='--')
     
@@ -214,7 +211,7 @@ def plot_clr_time_vs_k(stats, output_path="clr_time_vs_k.png"):
         handles.append(h)
         labels.append(algo.replace('clr-', ''))
     
-    fig.legend(handles, labels, loc="lower left", ncol=len(algorithms))
+    fig.legend(handles, labels, ncol=len(algorithms))
     #,
     #          bbox_to_anchor=(0.5, 1.05), frameon=True, fancybox=True)
     
@@ -251,7 +248,7 @@ def plot_clr_speedup_heatmap(stats, output_path="clr_speedup_heatmap.png"):
     
     for di, len_d in enumerate(len_D_vals):
         for ki, k in enumerate(k_vals):
-            baseline[di, ki] = clr_stats[('clr-pr', pr_opt_k[len_d], len_d)]['mean']
+            baseline[di, ki] = clr_stats[('clr-pr', k, len_d)]['mean']
             pp_dma[di, ki] = clr_stats[('clr-pp-dma', k, len_d)]['mean']
             mr2_dma[di, ki] = clr_stats[('clr-pp-mr2-dma', k, len_d)]['mean']
     
@@ -259,7 +256,7 @@ def plot_clr_speedup_heatmap(stats, output_path="clr_speedup_heatmap.png"):
     pp_speedup = (baseline - pp_dma) / baseline * 100
     mr2_speedup = (baseline - mr2_dma) / baseline * 100
     
-    fig, axes = plt.subplots(1, 2, figsize=(15,5))
+    fig, axes = plt.subplots(1, 2, figsize=(18, 5))
     
     titles = ["clr-pp-dma vs clr-pr", "clr-pp-mr2-dma vs clr-pr"]
     arrays = [pp_speedup, mr2_speedup]
@@ -283,13 +280,14 @@ def plot_clr_speedup_heatmap(stats, output_path="clr_speedup_heatmap.png"):
             for j in range(arr.shape[1]):
                 val = arr[i, j]
                 ax.text(j, i, f"{val:.1f}%", ha="center", va="center",
-                       fontsize=9, color="black")
+                       fontsize=10, color="black")
         
         ax.set_title(title)
-        fig.colorbar(im, ax=ax, shrink=0.8)
-    
-    fig.suptitle("CLR Optimization Speedup vs Baseline (%)", y=1.02)
-    fig.tight_layout()
+
+    fig.suptitle("CLR Optimization Speedup vs Baseline (%)")
+    fig.subplots_adjust(right=0.9)
+    cbar_ax = fig.add_axes([0.93, 0.15, 0.03, 0.7])
+    fig.colorbar(im, cax=cbar_ax)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     return fig
 
@@ -306,56 +304,25 @@ def print_summary_report(stats, data_groups):
     # Single-factor section
     sf_keys = [k for k in stats if k[1] == 0]
     if sf_keys:
-        print("\n--- SINGLE-FACTOR HASHES (k=0) ---")
+        print("\n--- SINGLE-FACTOR HASHES (k=0) ---\n")
         print(f"{'Algorithm':<18} {'len(D)':>8} {'len(a)':>8} {'Mean Time (μs)':>16} {'Std Dev':>9}")
         print("-" * 70)
-        for key in sorted(sf_keys, key=lambda x: (x[2], x[3], x[0]))[:24]:  # Limit output
+        for key in sorted(sf_keys, key=lambda x: (x[2], x[3], x[0])):
             algo, k, len_d, len_a = key
             s = stats[key]
             print(f"{algo:<18} {len_d:>8} {len_a:>8} {s['mean']:16.3f} {s['std']:9.3f}")
     
     # CLR section
-    clr_stats = {k[:3]: v for k, v in stats.items() if k[1] > 0 and k[0].startswith('clr-')}
+    clr_stats = {k: v for k, v in stats.items() if k[1] > 0 and k[0].startswith('clr-')}
     clr_keys = clr_stats.keys()
     if clr_stats:
-        print("\n--- CLR HASHES (k>0) ---")
-
-        len_D_vals = sorted(set(k[2] for k in clr_keys))
-        
-        # Best performing combinations
-        best = [min((k for k in clr_keys if k[2] == len_d), key=lambda k: clr_stats[k]['mean']) for len_d in len_D_vals]
-        best = [[k for k in stats.keys() if k[:3] == target][0] for target in best]
-
-        print(f"\nOptimal configurations:\n")
-
-        for k in best:
-            print(f"  {k[0]} at k={k[1]}, len(D)={k[2]}")
-            print(f"  Time: {int(stats[k]['mean'])} μs, Steps: {data_groups['steps_by_params'].get((k[1], k[2], k[3]), [])[0] if data_groups['steps_by_params'].get((k[1], k[2], k[3])) else 'N/A'}")
-        
-        # Optimal k per len(D)
-        print("\nOptimal k by len(D):")
-        print(f"{'len(D)':>8} {'clr-pr':<8} {'clr-pp-dma':<12} {'clr-pp-mr2-dma':<16} {'Speedup':<9}")
-        print("-" * 55)
-            
-        for len_d in len_D_vals:
-            keys_at_d = [(k, clr_stats[k]) for k in clr_keys if k[2] == len_d]
-            
-            pr_times = [(k, clr_stats.get(('clr-pr', k, len_d), {'mean': None})['mean']) 
-                       for k in set(k[1] for k in clr_keys if k[2] == len_d)]
-            pr_opt_k, pr_opt_t = min(pr_times, key=lambda x: x[1] or float('inf'))
-
-            pp_times = [(k, clr_stats.get(('clr-pp-dma', k, len_d), {'mean': None})['mean']) 
-                       for k in set(k[1] for k in clr_keys if k[2] == len_d)]
-            pp_opt_k, pp_opt_t = min(pp_times, key=lambda x: x[1] or float('inf'))
-            
-            mr2_times = [(k, clr_stats.get(('clr-pp-mr2-dma', k, len_d), {'mean': None})['mean'])
-                        for k in set(k[1] for k in clr_keys if k[2] == len_d)]
-            mr2_opt_k, mr2_opt_t = min(mr2_times, key=lambda x: x[1] or float('inf'))
-
-            baseline_t = clr_stats[('clr-pr', pr_opt_k, len_d)]['mean']
-            speedup = (baseline_t - pp_opt_t) / baseline_t * 100
-            
-            print(f"{len_d:>8} k={pr_opt_k:<6} k={pp_opt_k:<10} k={mr2_opt_k:<14} {f'{speedup:<.1f}%':<9}")
+        print("\n--- CLR HASHES (k>0) ---\n")
+        print(f"{'Algorithm':<18} {'len(D)':>8} {'k':>3} {'Mean Time (μs)':>16} {'Std Dev':>9}")
+        print("-" * 70)
+        for key in sorted(clr_keys, key=lambda x: (x[2], x[3], x[0])):
+            algo, k, len_d, len_a = key
+            s = stats[key]
+            print(f"{algo:<18} {len_d:>8} {k:>3} {s['mean']:16.3f} {s['std']:9.3f}")
     
     print("\n" + "=" * 70)
 
@@ -382,8 +349,10 @@ if __name__ == "__main__":
     
     # Single-factor (if present)
     if data_groups['single_factor']:
-        plot_single_factor_grouped_bars(stats, "single_factor_bars.png")
-        print("  ✓ single_factor_bars.png")
+        output_paths = [f"single_factor_bars_{len_d}.png" for len_d in sorted(set(k[2] for k in stats.keys()))]
+        plot_single_factor_grouped_bars(stats, output_paths)
+        for output_path in output_paths:
+            print(f"  ✓ {output_path}")
     
     # CLR-specific
     if data_groups['clr']:
